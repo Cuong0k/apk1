@@ -64,9 +64,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    auth.error!,
+                    auth.error!.replaceAll('Exception: ', ''),
                     style: const TextStyle(color: AppTheme.disconnected, fontSize: 13),
                     textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(height: 16),
