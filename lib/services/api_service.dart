@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
 class ApiService {
-  static const _baseUrl = 'https://vpnstore.pro.vn';
+  static const _baseUrl = 'https://client-user.jiangsuhk.com';
 
   static Dio _dio({String? token, bool formData = false}) {
     final dio = Dio(BaseOptions(
