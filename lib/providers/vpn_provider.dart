@@ -96,7 +96,6 @@ class VpnProvider extends ChangeNotifier {
         // Dùng flutter_v2ray URL parser cho VLESS/VMess/Trojan/SS
         final v2rayUrl = FlutterV2ray.parseFromURL(_selected!.rawUri);
         config = v2rayUrl.getFullConfiguration(
-          proxyOnly: false,
           bypassLan: _settings['domain_bypass'] ?? true,
         );
       } else {
@@ -108,7 +107,6 @@ class VpnProvider extends ChangeNotifier {
         config: config,
         blockedApps: null,
         bypassSubnets: null,
-        proxyOnly: false,
       );
     } catch (e) {
       _error = e.toString();
