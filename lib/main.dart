@@ -30,7 +30,7 @@ class VpnStoreApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeMode = context.watch<ThemeProvider>().mode;
     return MaterialApp(
-      title: 'VPNStore',
+      title: 'Beno VPN',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
