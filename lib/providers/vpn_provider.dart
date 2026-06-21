@@ -95,9 +95,7 @@ class VpnProvider extends ChangeNotifier {
       if (_nativeProtocols.contains(_selected!.protocol)) {
         // Dùng flutter_v2ray URL parser cho VLESS/VMess/Trojan/SS
         final v2rayUrl = FlutterV2ray.parseFromURL(_selected!.rawUri);
-        config = v2rayUrl.getFullConfiguration(
-          bypassLan: _settings['domain_bypass'] ?? true,
-        );
+        config = v2rayUrl.getFullConfiguration();
       } else {
         // Dùng custom builder cho TUIC/Hysteria2/AnyTLS
         config = XrayConfigBuilder.build(_selected!, _settings);
