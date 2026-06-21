@@ -76,9 +76,7 @@ class VpnProvider extends ChangeNotifier {
     _autoSelect = false;
     _selected = server;
     notifyListeners();
-    if (wasConnected) {
-      disconnect().then((_) => connect());
-    }
+    if (wasConnected) _reconnect();
   }
 
   // Enable auto-select mode — actual ping happens synchronously inside connect()
@@ -87,9 +85,13 @@ class VpnProvider extends ChangeNotifier {
     _autoSelect = true;
     _selected = null;
     notifyListeners();
-    if (wasConnected) {
-      disconnect().then((_) => connect());
-    }
+    if (wasConnected) _reconnect();
+  }
+
+  Future<void> _reconnect() async {
+    await disconnect();
+    await Future.delayed(const Duration(milliseconds: 800));
+    await connect();
   }
 
   Future<void> _pingAndPickBest() async {

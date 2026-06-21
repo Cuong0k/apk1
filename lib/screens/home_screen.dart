@@ -356,12 +356,10 @@ class _HomeScreenState extends State<HomeScreen> {
           Card(
             child: Column(
               children: [
-                _InfoRow(label: 'Email', value: user.email, icon: Icons.email_outlined),
-                if (user.id != null) ...[
-                  const Divider(height: 1, color: Colors.white12),
+                if (user.id != null)
                   _InfoRow(label: 'ID', value: '#${user.id}', icon: Icons.badge_outlined),
-                ],
-                const Divider(height: 1, color: Colors.white12),
+                if (user.id != null)
+                  const Divider(height: 1, color: Colors.white12),
                 _InfoRow(
                   label: 'Gói dịch vụ',
                   value: user.planName ?? 'Chưa kích hoạt',

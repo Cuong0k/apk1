@@ -20,6 +20,17 @@ class ApiService {
     ));
   }
 
+  // Get user info by subscription token via custom endpoint
+  static Future<Map<String, dynamic>> getUserInfoByToken(String token) async {
+    try {
+      final res = await _dio().get('/user-info', queryParameters: {'token': token});
+      if (res.statusCode == 200) return _parseData(res.data);
+      throw Exception(_statusMessage(res.statusCode, res.data));
+    } on DioException catch (e) {
+      throw Exception(_dioMessage(e));
+    }
+  }
+
   // Try to get user info using a token (works if panel accepts sub token as auth)
   static Future<Map<String, dynamic>> getUserInfo(String token) async {
     try {
