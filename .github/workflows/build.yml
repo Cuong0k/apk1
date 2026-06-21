@@ -26,16 +26,7 @@ jobs:
         run: flutter pub get
 
       - name: Generate app icons
-        run: |
-          sudo apt-get install -y imagemagick -qq
-          for size_dir in "36:mipmap-ldpi" "48:mipmap-mdpi" "72:mipmap-hdpi" "96:mipmap-xhdpi" "144:mipmap-xxhdpi" "192:mipmap-xxxhdpi"; do
-            size="${size_dir%%:*}"
-            dir="${size_dir##*:}"
-            mkdir -p "android/app/src/main/res/$dir"
-            convert -size ${size}x${size} xc:"#0D47A1" \
-              -fill "#00BCD4" -draw "circle $((size/2)),$((size/2)) $((size/2)),$((size/4))" \
-              "android/app/src/main/res/$dir/ic_launcher.png"
-          done
+        run: dart run flutter_launcher_icons
 
       - name: Build APK
         run: flutter build apk --release --no-obfuscate
