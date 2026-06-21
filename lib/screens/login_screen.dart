@@ -63,6 +63,16 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const Spacer(flex: 2),
 
+              const Text(
+                'VPNStore',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.accent,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 8),
               Text(
                 'Dán link subscription hoặc quét mã QR\nđể bắt đầu sử dụng',
                 textAlign: TextAlign.center,
