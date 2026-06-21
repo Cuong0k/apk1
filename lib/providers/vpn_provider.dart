@@ -170,7 +170,9 @@ class VpnProvider extends ChangeNotifier {
     if (_autoSelect && _servers.isEmpty) return;
     _error = null;
 
-    if (_autoSelect && _selected == null) {
+    // Always re-ping in auto-select mode to pick current best server
+    if (_autoSelect) {
+      _selected = null;
       _state = VpnState.connecting;
       notifyListeners();
       await _pingAndPickBest();

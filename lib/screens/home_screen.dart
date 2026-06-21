@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/vpn_provider.dart';
+import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import 'server_list_screen.dart';
 import 'settings_screen.dart';
@@ -50,11 +51,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final vpn = context.watch<VpnProvider>();
+    final theme = context.watch<ThemeProvider>();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('VPNStore'),
+        titleSpacing: 16,
+        title: Image.asset('assets/logo.png', height: 32),
         actions: [
+          IconButton(
+            icon: Icon(theme.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+            onPressed: () => context.read<ThemeProvider>().toggle(),
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.push(
@@ -81,10 +88,6 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tab,
         onTap: (i) => setState(() => _tab = i),
-        backgroundColor: AppTheme.card,
-        selectedItemColor: AppTheme.accent,
-        unselectedItemColor: Colors.white38,
-        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),
@@ -101,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ─── Tab 0: Dashboard ───────────────────────────────────────────────────────
+  // ─── Tab 0: Dashboard ─────────────────────────────────────────────────────
 
   Widget _buildDashboard(VpnProvider vpn) {
     final auth = context.watch<AuthProvider>();
@@ -120,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // ── Data info compact card ──
+            // ── Data info card ──
             if (user != null)
               Card(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -130,18 +133,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.data_usage_outlined, size: 16, color: Colors.white38),
+                          Icon(Icons.data_usage_outlined, size: 16, color: context.c3),
                           const SizedBox(width: 6),
                           Text(
                             '${user.usedGB.toStringAsFixed(2)} / ${user.totalGB.toStringAsFixed(2)} GB',
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                            style: TextStyle(color: context.c1, fontSize: 13, fontWeight: FontWeight.w500),
                           ),
                           const Spacer(),
-                          const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.white38),
+                          Icon(Icons.calendar_today_outlined, size: 14, color: context.c3),
                           const SizedBox(width: 4),
                           Text(
                             user.expiredDate,
-                            style: const TextStyle(color: Colors.white54, fontSize: 13),
+                            style: TextStyle(color: context.c2, fontSize: 13),
                           ),
                         ],
                       ),
@@ -150,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(3),
                         child: LinearProgressIndicator(
                           value: user.usedPercent,
-                          backgroundColor: Colors.white12,
+                          backgroundColor: context.c4,
                           color: user.usedPercent > 0.9 ? AppTheme.disconnected : AppTheme.accent,
                           minHeight: 5,
                         ),
@@ -160,13 +163,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // ── Cảnh báo tài khoản không hợp lệ ──
+            // ── Warning expired/inactive ──
             if (user != null && !user.isActive)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppTheme.disconnected.withOpacity(0.12),
+                  color: AppTheme.disconnected.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppTheme.disconnected.withOpacity(0.4)),
                 ),
@@ -184,11 +187,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // VPN Toggle
+            // ── VPN Toggle ──
             Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: AppTheme.card,
+                color: context.cardBg,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: stateColor.withOpacity(0.3), width: 1.5),
               ),
@@ -222,15 +225,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.speed_rounded, size: 16, color: Colors.white54),
+                        Icon(Icons.speed_rounded, size: 16, color: context.c2),
                         const SizedBox(width: 6),
                         Text(
                           vpn.totalSpeedStr,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.c1,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
@@ -242,11 +244,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 16),
 
-            // Server selector + Update button card
+            // ── Server selector + Update ──
             Card(
               child: Column(
                 children: [
-                  // Server selector row
                   InkWell(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                     onTap: () {
@@ -255,15 +256,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SnackBar(
                             content: Text('Tài khoản chưa kích hoạt hoặc đã hết hạn'),
                             backgroundColor: AppTheme.disconnected,
-                            duration: Duration(seconds: 2),
                           ),
                         );
                         return;
                       }
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ServerListScreen()),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ServerListScreen()));
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -276,32 +273,22 @@ class _HomeScreenState extends State<HomeScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  vpn.autoSelect
-                                      ? 'Tự động (Tốt nhất)'
-                                      : (vpn.selected?.name ?? 'Chọn máy chủ'),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                  vpn.autoSelect ? 'Tự động (Tốt nhất)' : (vpn.selected?.name ?? 'Chọn máy chủ'),
+                                  style: TextStyle(color: context.c1, fontSize: 15, fontWeight: FontWeight.w500),
                                 ),
                                 if (vpn.autoSelect && vpn.selected != null)
-                                  Text(
-                                    '→ ${vpn.selected!.name}',
-                                    style: const TextStyle(color: Colors.white38, fontSize: 12),
-                                  ),
+                                  Text('→ ${vpn.selected!.name}', style: TextStyle(color: context.c3, fontSize: 12)),
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right, color: Colors.white38),
+                          Icon(Icons.chevron_right, color: context.c3),
                         ],
                       ),
                     ),
                   ),
 
-                  const Divider(height: 1, color: Colors.white12),
+                  Divider(height: 1, color: context.c4),
 
-                  // Update button row
                   InkWell(
                     borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
                     onTap: _updating ? null : _onUpdate,
@@ -316,16 +303,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 )
                               : const Icon(Icons.sync, color: AppTheme.accent, size: 20),
                           const SizedBox(width: 12),
-                          const Text(
-                            'Cập nhật VPN',
-                            style: TextStyle(color: Colors.white, fontSize: 14),
-                          ),
+                          Text('Cập nhật VPN', style: TextStyle(color: context.c1, fontSize: 14)),
                           const Spacer(),
                           if (vpn.lastUpdated != null)
-                            Text(
-                              _fmtTime(vpn.lastUpdated!),
-                              style: const TextStyle(color: Colors.white38, fontSize: 12),
-                            ),
+                            Text(_fmtTime(vpn.lastUpdated!), style: TextStyle(color: context.c3, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -339,13 +320,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ─── Tab 1: Tools ───────────────────────────────────────────────────────────
+  // ─── Tab 1: Tools ─────────────────────────────────────────────────────────
 
   Widget _buildTools(AuthProvider auth) {
     final user = auth.user;
-    if (user == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (user == null) return const Center(child: CircularProgressIndicator());
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -359,14 +338,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (user.id != null)
                   _InfoRow(label: 'ID', value: '#${user.id}', icon: Icons.badge_outlined),
                 if (user.id != null)
-                  const Divider(height: 1, color: Colors.white12),
+                  Divider(height: 1, color: context.c4),
                 _InfoRow(
                   label: 'Gói dịch vụ',
                   value: user.planName ?? 'Chưa kích hoạt',
                   icon: Icons.card_membership_outlined,
-                  valueColor: user.planName != null ? AppTheme.accent : Colors.white38,
+                  valueColor: user.planName != null ? AppTheme.accent : context.c3,
                 ),
-                const Divider(height: 1, color: Colors.white12),
+                Divider(height: 1, color: context.c4),
                 _InfoRow(
                   label: 'Hết hạn',
                   value: user.expiredDate,
@@ -375,7 +354,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-
         ],
       ),
     );
@@ -420,16 +398,16 @@ class _InfoRow extends StatelessWidget {
     child: Row(
       children: [
         if (icon != null) ...[
-          Icon(icon!, color: Colors.white38, size: 18),
+          Icon(icon!, color: context.iconColor, size: 18),
           const SizedBox(width: 10),
         ],
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+        Text(label, style: TextStyle(color: context.c2, fontSize: 13)),
         const Spacer(),
         Flexible(
           child: Text(
             value,
             style: TextStyle(
-              color: valueColor ?? Colors.white,
+              color: valueColor ?? context.c1,
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
@@ -441,4 +419,3 @@ class _InfoRow extends StatelessWidget {
     ),
   );
 }
-

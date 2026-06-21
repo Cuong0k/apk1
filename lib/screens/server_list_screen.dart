@@ -77,9 +77,9 @@ class _ServerListScreenState extends State<ServerListScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.dns_outlined, size: 48, color: Colors.white24),
+                  Icon(Icons.dns_outlined, size: 48, color: context.c4),
                   const SizedBox(height: 12),
-                  const Text('Chưa có máy chủ', style: TextStyle(color: Colors.white54)),
+                  Text('Chưa có máy chủ', style: TextStyle(color: context.c2)),
                   const SizedBox(height: 16),
                   ElevatedButton(onPressed: _refresh, child: const Text('Tải lại')),
                 ],
@@ -109,7 +109,7 @@ class _ServerListScreenState extends State<ServerListScreen> {
                     leading: _ProtocolBadge(protocol: server.protocol),
                     title: Text(
                       server.name,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                      style: TextStyle(color: context.c1, fontSize: 14, fontWeight: FontWeight.w500),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -167,19 +167,19 @@ class _ServerListScreenState extends State<ServerListScreen> {
           ),
           child: const Icon(Icons.auto_awesome, color: AppTheme.accent, size: 20),
         ),
-        title: const Text(
+        title: Text(
           'Tự động',
-          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+          style: TextStyle(color: context.c1, fontSize: 14, fontWeight: FontWeight.w500),
         ),
         subtitle: Text(
           isActive && vpn.selected != null
               ? '→ ${vpn.selected!.name}'
               : 'Chọn máy chủ tốt nhất',
-          style: const TextStyle(color: Colors.white38, fontSize: 12),
+          style: TextStyle(color: context.c3, fontSize: 12),
         ),
         trailing: isActive
             ? const Icon(Icons.check_circle, color: AppTheme.accent)
-            : const Icon(Icons.chevron_right, color: Colors.white24),
+            : Icon(Icons.chevron_right, color: context.c4),
         onTap: () {
           vpn.setAutoSelect();
           Navigator.pop(context);
@@ -189,7 +189,7 @@ class _ServerListScreenState extends State<ServerListScreen> {
   }
 
   Color _pingColor(int ping) {
-    if (ping == -1) return Colors.white38;
+    if (ping == -1) return context.c3;
     if (ping < 100) return AppTheme.connected;
     if (ping < 300) return Colors.orange;
     return AppTheme.disconnected;

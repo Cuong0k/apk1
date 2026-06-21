@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import 'qr_scan_screen.dart';
 
@@ -52,6 +53,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDark;
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -61,25 +64,12 @@ class _LoginScreenState extends State<LoginScreen> {
               const Spacer(flex: 2),
 
               // Logo
-              Container(
-                width: 90, height: 90,
-                decoration: BoxDecoration(
-                  color: AppTheme.accent.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.accent, width: 2),
-                ),
-                child: const Icon(Icons.vpn_lock_rounded, size: 44, color: AppTheme.accent),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'VPNStore',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              const Text(
+              Image.asset('assets/logo.png', width: 200),
+              const SizedBox(height: 24),
+              Text(
                 'Dán link subscription hoặc quét mã QR\nđể bắt đầu sử dụng',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54, fontSize: 14, height: 1.5),
+                style: TextStyle(color: context.c2, fontSize: 14, height: 1.5),
               ),
 
               const Spacer(flex: 2),
@@ -87,15 +77,14 @@ class _LoginScreenState extends State<LoginScreen> {
               // URL input
               TextField(
                 controller: _ctrl,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: TextStyle(color: context.c1, fontSize: 14),
                 maxLines: 3,
                 minLines: 1,
                 decoration: InputDecoration(
                   hintText: 'Dán link subscription tại đây...',
-                  hintStyle: const TextStyle(color: Colors.white30, fontSize: 14),
+                  hintStyle: TextStyle(color: context.c3, fontSize: 14),
                   filled: true,
-                  fillColor: AppTheme.card,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  fillColor: context.inputBg,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -105,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
                   ),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.white30, size: 18),
+                    icon: Icon(Icons.clear, color: context.c3, size: 18),
                     onPressed: () { _ctrl.clear(); setState(() => _error = null); },
                   ),
                 ),
@@ -116,7 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppTheme.disconnected.withOpacity(0.1),
+                    color: AppTheme.disconnected.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppTheme.disconnected.withOpacity(0.3)),
                   ),
@@ -161,20 +150,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: _loading
                       ? const SizedBox(
                           width: 20, height: 20,
-                          child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : const Text(
                           'Xác nhận',
-                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                 ),
               ),
 
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 'Chỉ chấp nhận link từ dịch vụ VPNStore',
-                style: TextStyle(color: Colors.white24, fontSize: 12),
+                style: TextStyle(color: context.c4, fontSize: 12),
                 textAlign: TextAlign.center,
+              ),
+
+              // Dark/Light toggle on login screen
+              const SizedBox(height: 8),
+              IconButton(
+                icon: Icon(
+                  isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  color: context.c3,
+                  size: 20,
+                ),
+                onPressed: () => context.read<ThemeProvider>().toggle(),
               ),
 
               const Spacer(flex: 2),
