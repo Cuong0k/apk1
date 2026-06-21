@@ -127,15 +127,7 @@ class VpnProvider extends ChangeNotifier {
           bestPing < currentPing - 50) {
         _selected = best;
         notifyListeners();
-        // Reconnect trực tiếp tới server đã chọn (không re-ping)
-        _userDisconnecting = true;
-        await _v2ray.stopV2Ray();
-        _state = VpnState.disconnected;
-        notifyListeners();
-        Future.delayed(const Duration(milliseconds: 300), () {
-          _userDisconnecting = false;
-          connect();
-        });
+        await _fastSwitch(); // stop → start ngay, không delay
       }
     } finally {
       _checking = false;
@@ -164,43 +156,39 @@ class VpnProvider extends ChangeNotifier {
   // ── Server selection ─────────────────────────────────────────────────────
 
   void selectServer(Server server) {
-    final wasConnected = _state == VpnState.connected;
     _autoSelect = false;
     _selected = server;
     _savedSelectedUri = server.rawUri;
     StorageService.saveVpnMode(autoSelect: false, selectedUri: server.rawUri);
     notifyListeners();
-    if (wasConnected) _reconnectTo(server);
-  }
-
-  void setAutoSelect() {
-    final wasConnected = _state == VpnState.connected;
-    _autoSelect = true;
-    _selected = null; // force re-ping
-    _savedSelectedUri = null;
-    StorageService.saveVpnMode(autoSelect: true, selectedUri: null);
-    notifyListeners();
-    if (wasConnected) {
-      _userDisconnecting = true;
-      _v2ray.stopV2Ray().then((_) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          _userDisconnecting = false;
-          connect();
-        });
-      });
+    if (_state == VpnState.connected || _state == VpnState.connecting) {
+      _fastSwitch();
     }
   }
 
-  // Chuyển sang server cụ thể không cần re-ping (dùng khi user chọn thủ công)
-  Future<void> _reconnectTo(Server server) async {
-    _userDisconnecting = true;
-    await _v2ray.stopV2Ray();
-    _state = VpnState.disconnected;
+  void setAutoSelect() {
+    _autoSelect = true;
+    _selected = null; // force re-ping khi connect
+    _savedSelectedUri = null;
+    StorageService.saveVpnMode(autoSelect: true, selectedUri: null);
     notifyListeners();
-    Future.delayed(const Duration(milliseconds: 300), () {
-      _userDisconnecting = false;
-      connect();
-    });
+    if (_state == VpnState.connected || _state == VpnState.connecting) {
+      _fastSwitch();
+    }
+  }
+
+  // Stop → Start ngay lập tức, không delay — nhanh nhất có thể
+  Future<void> _fastSwitch() async {
+    _userDisconnecting = true;
+    _state = VpnState.connecting;
+    notifyListeners();
+    try {
+      await _v2ray.stopV2Ray();
+      await connect(); // _selected đã set sẵn → không re-ping, start luôn
+    } finally {
+      // Reset sau connect() để onStatusChanged muộn không trigger auto-reconnect
+      Future.delayed(const Duration(milliseconds: 200), () => _userDisconnecting = false);
+    }
   }
 
   // ── VPN control ──────────────────────────────────────────────────────────
@@ -280,8 +268,7 @@ class VpnProvider extends ChangeNotifier {
     await _v2ray.stopV2Ray();
     _state = VpnState.disconnected;
     notifyListeners();
-    // Giữ flag 300ms để tránh race condition với onStatusChanged
-    Future.delayed(const Duration(milliseconds: 300), () => _userDisconnecting = false);
+    Future.delayed(const Duration(milliseconds: 200), () => _userDisconnecting = false);
   }
 
   // ── Ping ─────────────────────────────────────────────────────────────────
