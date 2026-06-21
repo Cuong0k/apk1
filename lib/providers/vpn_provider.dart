@@ -23,6 +23,7 @@ class VpnProvider extends ChangeNotifier {
   String? _error;
   bool _autoSelect = false;
   bool _userDisconnecting = false;
+  String? _savedSelectedUri;   // restored from storage, matched after loadServers
   DateTime? _lastUpdated;
   Timer? _pingTimer;
 
@@ -71,6 +72,9 @@ class VpnProvider extends ChangeNotifier {
 
   Future<void> _init() async {
     _settings = await StorageService.getSettings();
+    final mode = await StorageService.getVpnMode();
+    _autoSelect = mode.autoSelect;
+    _savedSelectedUri = mode.selectedUri;
     await _v2ray.initializeV2Ray(
       notificationIconResourceType: 'mipmap',
       notificationIconResourceName: 'ic_launcher',
@@ -84,7 +88,7 @@ class VpnProvider extends ChangeNotifier {
 
   void _startPingMonitor() {
     _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+    _pingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (_autoSelect && _state == VpnState.connected && _servers.length > 1) {
         _checkAndSwitch();
       }
@@ -105,10 +109,10 @@ class VpnProvider extends ChangeNotifier {
     final currentPing = (_selected?.ping == null || _selected!.ping <= 0)
         ? 99999
         : _selected!.ping;
-    // Switch if another server is ≥50ms faster than current (no absolute threshold)
+    // Switch if another server is ≥30ms faster than current
     if (best != null &&
-        best.host != (_selected?.host ?? '') &&
-        bestPing < currentPing - 50) {
+        best.rawUri != (_selected?.rawUri ?? '') &&
+        bestPing < currentPing - 30) {
       _selected = best;
       notifyListeners();
       await _reconnect();
@@ -121,7 +125,13 @@ class VpnProvider extends ChangeNotifier {
     try {
       final sub = await ApiService.getSubscription(subToken, authData: authData);
       _servers = Server.parseSubscription(sub);
-      if (_servers.isNotEmpty && _selected == null && !_autoSelect) {
+      // Restore previously selected server
+      if (_savedSelectedUri != null && !_autoSelect) {
+        _selected = _servers.firstWhere(
+          (s) => s.rawUri == _savedSelectedUri,
+          orElse: () => _servers.first,
+        );
+      } else if (_selected == null && !_autoSelect && _servers.isNotEmpty) {
         _selected = _servers.first;
       }
       _lastUpdated = DateTime.now();
@@ -135,6 +145,8 @@ class VpnProvider extends ChangeNotifier {
     final wasConnected = _state == VpnState.connected;
     _autoSelect = false;
     _selected = server;
+    _savedSelectedUri = server.rawUri;
+    StorageService.saveVpnMode(autoSelect: false, selectedUri: server.rawUri);
     notifyListeners();
     if (wasConnected) _reconnect();
   }
@@ -143,6 +155,8 @@ class VpnProvider extends ChangeNotifier {
     final wasConnected = _state == VpnState.connected;
     _autoSelect = true;
     _selected = null;
+    _savedSelectedUri = null;
+    StorageService.saveVpnMode(autoSelect: true, selectedUri: null);
     notifyListeners();
     if (wasConnected) _reconnect();
   }

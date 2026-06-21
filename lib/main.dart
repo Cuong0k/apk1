@@ -43,7 +43,20 @@ class VpnStoreApp extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.asset('assets/icon.png', width: 160),
+                    const Text(
+                      'VPNStore',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.accent,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Đang xác minh...',
+                      style: TextStyle(color: Colors.white54, fontSize: 14),
+                    ),
                     const SizedBox(height: 32),
                     const CircularProgressIndicator(color: AppTheme.accent),
                   ],

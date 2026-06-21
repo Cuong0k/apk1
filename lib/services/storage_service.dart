@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class StorageService {
   static const _keySubToken = 'sub_token_v2';
   static const _keySettings = 'vpn_settings';
+  static const _keyAutoSelect = 'vpn_auto_select';
+  static const _keySelectedUri = 'vpn_selected_uri';
 
   // Token stored in Android Keystore / iOS Keychain (hardware-backed encryption)
   static const _secure = FlutterSecureStorage(
@@ -54,6 +56,24 @@ class StorageService {
     await prefs.remove('sub_token');
     await prefs.remove('auth_data');
     await prefs.remove('auth_email');
+  }
+
+  static Future<void> saveVpnMode({required bool autoSelect, String? selectedUri}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyAutoSelect, autoSelect);
+    if (selectedUri != null) {
+      await prefs.setString(_keySelectedUri, selectedUri);
+    } else {
+      await prefs.remove(_keySelectedUri);
+    }
+  }
+
+  static Future<({bool autoSelect, String? selectedUri})> getVpnMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (
+      autoSelect: prefs.getBool(_keyAutoSelect) ?? false,
+      selectedUri: prefs.getString(_keySelectedUri),
+    );
   }
 
   static Future<Map<String, dynamic>> getSettings() async {
