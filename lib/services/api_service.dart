@@ -3,16 +3,14 @@ import 'package:dio/dio.dart';
 class ApiService {
   static const _baseUrl = 'https://client-user.jiangsuhk.com';
 
-  static Dio _dio({String? token, bool formEncoded = false}) {
+  static Dio _dio({String? token}) {
     return Dio(BaseOptions(
       baseUrl: _baseUrl,
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
       headers: {
         'Accept': 'application/json',
-        'Content-Type': formEncoded
-            ? 'application/x-www-form-urlencoded'
-            : 'application/json',
+        'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 VPNStore/1.0',
         'Origin': _baseUrl,
         'Referer': '$_baseUrl/',
@@ -22,25 +20,7 @@ class ApiService {
     ));
   }
 
-  static Future<Map<String, dynamic>> login(String email, String password) async {
-    // Thử JSON
-    final r1 = await _dio().post(
-      '/api/v1/passport/auth/login',
-      data: {'email': email, 'password': password},
-    );
-    if (r1.statusCode == 200) return _parseData(r1.data);
-
-    // Thử form-urlencoded nếu thất bại
-    final r2 = await _dio(formEncoded: true).post(
-      '/api/v1/passport/auth/login',
-      data: 'email=${Uri.encodeComponent(email)}&password=${Uri.encodeComponent(password)}',
-    );
-    if (r2.statusCode == 200) return _parseData(r2.data);
-
-    // Trả về lỗi thân thiện theo status code
-    throw Exception(_statusMessage(r2.statusCode, r2.data));
-  }
-
+  // Try to get user info using a token (works if panel accepts sub token as auth)
   static Future<Map<String, dynamic>> getUserInfo(String token) async {
     try {
       final res = await _dio(token: token).get('/api/v1/user/info');
@@ -51,8 +31,23 @@ class ApiService {
     }
   }
 
-  // subToken: plain token dùng làm query param (?token=xxx)
-  // authData: JWT Bearer token dùng trong header
+  // Fetch subscription content and parse subscription-userinfo header
+  static Future<({String content, Map<String, dynamic>? userInfo})>
+      getSubscriptionWithInfo(String subToken) async {
+    try {
+      final res = await _dio().get(
+        '/api/v1/client/subscribe',
+        queryParameters: {'token': subToken, 'flag': 'v2rayn'},
+      );
+      final content = res.data.toString();
+      final headerStr = res.headers.value('subscription-userinfo');
+      final userInfo = headerStr != null ? _parseSubHeader(headerStr, subToken) : null;
+      return (content: content, userInfo: userInfo);
+    } on DioException catch (e) {
+      throw Exception(_dioMessage(e));
+    }
+  }
+
   static Future<String> getSubscription(String subToken, {String? authData}) async {
     try {
       final res = await _dio(token: authData).get(
@@ -65,6 +60,24 @@ class ApiService {
     }
   }
 
+  // Parse "upload=xxx; download=xxx; total=xxx; expire=unix" header
+  static Map<String, dynamic> _parseSubHeader(String header, String token) {
+    final info = <String, dynamic>{};
+    for (final part in header.split(';')) {
+      final kv = part.trim().split('=');
+      if (kv.length == 2) info[kv[0].trim()] = int.tryParse(kv[1].trim()) ?? 0;
+    }
+    return {
+      'u': info['upload'] ?? 0,
+      'd': info['download'] ?? 0,
+      'transfer_enable': info['total'] ?? 0,
+      'expired_at': info['expire'],
+      'token': token,
+      'auth_data': token,
+      'email': '',
+    };
+  }
+
   static Map<String, dynamic> _parseData(dynamic body) {
     if (body is Map) {
       if (body['data'] != null) return Map<String, dynamic>.from(body['data'] as Map);
@@ -74,14 +87,12 @@ class ApiService {
   }
 
   static String _statusMessage(int? code, dynamic body) {
-    // Thử lấy message từ body
     if (body is Map && body['message'] != null) return body['message'].toString();
     return switch (code) {
-      400 => 'Thông tin đăng nhập không hợp lệ',
-      401 => 'Không có quyền truy cập',
-      403 => 'Email hoặc mật khẩu không đúng',
+      400 => 'Token không hợp lệ',
+      401 => 'Token đã hết hạn hoặc sai',
+      403 => 'Không có quyền truy cập',
       404 => 'Không tìm thấy tài nguyên',
-      422 => 'Dữ liệu không hợp lệ',
       429 => 'Quá nhiều yêu cầu, thử lại sau',
       _   => 'Lỗi server ($code)',
     };

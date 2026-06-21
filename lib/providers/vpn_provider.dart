@@ -81,12 +81,15 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
-  // Enable auto-select mode: ping all servers in background and pick best
+  // Enable auto-select mode — actual ping happens synchronously inside connect()
   void setAutoSelect() {
+    final wasConnected = _state == VpnState.connected;
     _autoSelect = true;
     _selected = null;
     notifyListeners();
-    _pingAndPickBest();
+    if (wasConnected) {
+      disconnect().then((_) => connect());
+    }
   }
 
   Future<void> _pingAndPickBest() async {
@@ -99,10 +102,9 @@ class VpnProvider extends ChangeNotifier {
         best = s;
       }
     }
-    if (best != null && _autoSelect) {
-      _selected = best;
-      notifyListeners();
-    }
+    // If all timed out, fall back to first server
+    _selected = best ?? (_servers.isNotEmpty ? _servers.first : null);
+    notifyListeners();
   }
 
   Future<void> toggleVpn() async {
@@ -115,8 +117,22 @@ class VpnProvider extends ChangeNotifier {
   }
 
   Future<void> connect() async {
-    if (_selected == null) return;
+    if (!_autoSelect && _selected == null) return;
+    if (_autoSelect && _servers.isEmpty) return;
     _error = null;
+
+    // Auto-select: ping all servers FIRST then pick best
+    if (_autoSelect && _selected == null) {
+      _state = VpnState.connecting;
+      notifyListeners();
+      await _pingAndPickBest();
+      if (_selected == null) {
+        _error = 'Không tìm được máy chủ khả dụng';
+        _state = VpnState.disconnected;
+        notifyListeners();
+        return;
+      }
+    }
 
     final permission = await _v2ray.requestPermission();
     if (!permission) return;

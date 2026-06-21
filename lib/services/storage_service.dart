@@ -24,18 +24,18 @@ class StorageService {
     }
   }
 
-  static Future<void> saveAuth(String authData, String subToken, String email) async {
+  static Future<void> saveSubToken(String subToken) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyAuthData, _obfuscate(authData));
     await prefs.setString(_keySubToken, _obfuscate(subToken));
-    await prefs.setString(_keyEmail, email);
   }
 
-  static Future<String?> getAuthData() async {
+  // Legacy - kept for migration compatibility
+  static Future<void> saveAuth(String authData, String subToken, String email) async {
     final prefs = await SharedPreferences.getInstance();
-    final s = prefs.getString(_keyAuthData);
-    return s != null ? _deobfuscate(s) : null;
+    await prefs.setString(_keySubToken, _obfuscate(subToken));
   }
+
+  static Future<String?> getAuthData() async => null;
 
   static Future<String?> getSubToken() async {
     final prefs = await SharedPreferences.getInstance();

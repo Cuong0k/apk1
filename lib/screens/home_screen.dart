@@ -86,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _tab,
         children: [
           _buildDashboard(vpn),
-          _buildTools(auth, vpn),
+          _buildTools(auth),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -115,6 +115,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─── Tab 0: Dashboard ───────────────────────────────────────────────────────
 
   Widget _buildDashboard(VpnProvider vpn) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
     final stateColor = vpn.isConnected ? AppTheme.connected : AppTheme.disconnected;
     final stateLabel = switch (vpn.state) {
       VpnState.connected    => 'Đã kết nối',
@@ -129,6 +131,46 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+            // ── Data info compact card ──
+            if (user != null)
+              Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.data_usage_outlined, size: 16, color: Colors.white38),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${user.usedGB.toStringAsFixed(2)} / ${user.totalGB.toStringAsFixed(2)} GB',
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.white38),
+                          const SizedBox(width: 4),
+                          Text(
+                            user.expiredDate,
+                            style: const TextStyle(color: Colors.white54, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: user.usedPercent,
+                          backgroundColor: Colors.white12,
+                          color: user.usedPercent > 0.9 ? AppTheme.disconnected : AppTheme.accent,
+                          minHeight: 5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             // VPN Toggle
             Container(
               padding: const EdgeInsets.all(28),
@@ -272,7 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ─── Tab 1: Tools ───────────────────────────────────────────────────────────
 
-  Widget _buildTools(AuthProvider auth, VpnProvider vpn) {
+  Widget _buildTools(AuthProvider auth) {
     final user = auth.user;
     if (user == null) {
       return const Center(child: CircularProgressIndicator());
@@ -309,82 +351,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          const SizedBox(height: 16),
-          _SectionLabel('Dữ liệu'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${user.usedGB.toStringAsFixed(2)} GB',
-                        style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        '/ ${user.totalGB.toStringAsFixed(2)} GB',
-                        style: const TextStyle(color: Colors.white54, fontSize: 15),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: user.usedPercent,
-                      backgroundColor: Colors.white12,
-                      color: user.usedPercent > 0.9 ? AppTheme.disconnected : AppTheme.accent,
-                      minHeight: 8,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Đã dùng ${(user.usedPercent * 100).toStringAsFixed(1)}%',
-                        style: const TextStyle(color: Colors.white38, fontSize: 12),
-                      ),
-                      Text(
-                        'Còn ${(user.totalGB - user.usedGB).toStringAsFixed(2)} GB',
-                        style: const TextStyle(color: Colors.white38, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-          _SectionLabel('Máy chủ'),
-          Card(
-            child: Column(
-              children: [
-                _InfoRow(
-                  label: 'Đang dùng',
-                  value: vpn.autoSelect
-                      ? 'Tự động → ${vpn.selected?.name ?? "Đang chọn..."}'
-                      : (vpn.selected?.name ?? 'Chưa chọn'),
-                  icon: Icons.dns_outlined,
-                ),
-                const Divider(height: 1, color: Colors.white12),
-                _InfoRow(
-                  label: 'Tổng số',
-                  value: '${vpn.servers.length} máy chủ',
-                  icon: Icons.list_outlined,
-                ),
-                const Divider(height: 1, color: Colors.white12),
-                _InfoRow(
-                  label: 'Cập nhật lúc',
-                  value: vpn.lastUpdated != null ? _fmtTime(vpn.lastUpdated!) : 'Chưa cập nhật',
-                  icon: Icons.update_outlined,
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
