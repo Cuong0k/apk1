@@ -115,13 +115,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           _SpeedBadge(
                             icon: Icons.arrow_upward,
-                            value: vpn.status!.uploadSpeed,
+                            value: vpn.status!.uploadSpeed.toString(),
                             color: Colors.greenAccent,
                           ),
                           const SizedBox(width: 16),
                           _SpeedBadge(
                             icon: Icons.arrow_downward,
-                            value: vpn.status!.downloadSpeed,
+                            value: vpn.status!.downloadSpeed.toString(),
                             color: AppTheme.accent,
                           ),
                         ],

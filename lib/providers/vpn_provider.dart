@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import '../models/server.dart';
@@ -9,7 +9,7 @@ import '../services/xray_config_builder.dart';
 enum VpnState { disconnected, connecting, connected }
 
 class VpnProvider extends ChangeNotifier {
-  final FlutterV2ray _v2ray = FlutterV2ray(onStatusChanged: (_) {});
+  late final FlutterV2ray _v2ray;
 
   VpnState _state = VpnState.disconnected;
   List<Server> _servers = [];
@@ -28,6 +28,17 @@ class VpnProvider extends ChangeNotifier {
   String? get error => _error;
 
   VpnProvider() {
+    _v2ray = FlutterV2ray(
+      onStatusChanged: (status) {
+        _status = status;
+        _state = switch (status.state) {
+          'CONNECTED'  => VpnState.connected,
+          'CONNECTING' => VpnState.connecting,
+          _            => VpnState.disconnected,
+        };
+        notifyListeners();
+      },
+    );
     _init();
   }
 
@@ -38,16 +49,7 @@ class VpnProvider extends ChangeNotifier {
       notificationIconResourceName: 'ic_launcher',
     );
     _initialized = true;
-
-    _v2ray.v2RayStatusStream.listen((status) {
-      _status = status;
-      _state = switch (status.state) {
-        'CONNECTED'    => VpnState.connected,
-        'CONNECTING'   => VpnState.connecting,
-        _              => VpnState.disconnected,
-      };
-      notifyListeners();
-    });
+    notifyListeners();
   }
 
   Future<void> loadServers(String token) async {
@@ -79,7 +81,7 @@ class VpnProvider extends ChangeNotifier {
     if (_selected == null) return;
     _error = null;
 
-    final permission = await FlutterV2ray.requestPermission();
+    final permission = await _v2ray.requestPermission();
     if (!permission) return;
 
     _state = VpnState.connecting;
@@ -107,11 +109,17 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Ping a server by running xray in proxy-only mode and measuring latency.
+  /// TCP ping — đo độ trễ kết nối tới server (không cần VPN đang chạy)
   Future<int> pingServer(Server server) async {
+    final start = DateTime.now().millisecondsSinceEpoch;
     try {
-      final config = XrayConfigBuilder.build(server, _settings);
-      final delay = await FlutterV2ray.getServerDelay(config: config);
+      final socket = await Socket.connect(
+        server.host,
+        server.port,
+        timeout: const Duration(seconds: 5),
+      );
+      final delay = DateTime.now().millisecondsSinceEpoch - start;
+      socket.destroy();
       server.ping = delay;
       notifyListeners();
       return delay;
