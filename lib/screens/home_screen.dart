@@ -33,17 +33,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _onUpdate() async {
-    final vpn = context.read<VpnProvider>();
-    if (vpn.isConnected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vui lòng tắt VPN để cập nhật'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
     setState(() => _updating = true);
     await _load();
     if (!mounted) return;

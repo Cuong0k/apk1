@@ -56,7 +56,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _loadUser(String token, {required bool save}) async {
-    // Strategy 1: call /user/info with token as Authorization header
+    // Strategy 1: getUserInfo with raw token as Authorization
     try {
       final info = await ApiService.getUserInfo(token);
       _user = UserInfo.fromJson({...info, 'token': token, 'auth_data': token});
@@ -64,12 +64,34 @@ class AuthProvider extends ChangeNotifier {
       return;
     } catch (_) {}
 
-    // Strategy 2: fetch subscription and parse subscription-userinfo header
+    // Strategy 2: getUserInfo with Bearer prefix
+    try {
+      final info = await ApiService.getUserInfo('Bearer $token');
+      _user = UserInfo.fromJson({...info, 'token': token, 'auth_data': token});
+      if (save) await StorageService.saveSubToken(token);
+      return;
+    } catch (_) {}
+
+    // Strategy 3: fetch subscription → valid content = account is active
     try {
       final result = await ApiService.getSubscriptionWithInfo(token);
-      if (result.content.isNotEmpty && result.content != 'null') {
-        final infoMap = result.userInfo ?? {'token': token, 'auth_data': token, 'email': ''};
-        _user = UserInfo.fromJson({...infoMap, 'token': token, 'auth_data': token});
+      final valid = result.content.isNotEmpty &&
+                    result.content != 'null' &&
+                    result.content.length > 10;
+      if (valid) {
+        final base = result.userInfo ?? {};
+        _user = UserInfo.fromJson({
+          'token': token,
+          'auth_data': token,
+          'email': base['email'] ?? '',
+          'transfer_enable': base['transfer_enable'] ?? 0,
+          'u': base['u'] ?? 0,
+          'd': base['d'] ?? 0,
+          'expired_at': base['expired_at'],
+          // Valid subscription proves account is active
+          'plan': {'name': 'VPNStore'},
+          'plan_id': 1,
+        });
         if (save) await StorageService.saveSubToken(token);
       }
     } catch (_) {}
