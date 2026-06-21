@@ -63,9 +63,6 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const Spacer(flex: 2),
 
-              // Logo
-              Image.asset('assets/icon.png', width: 160),
-              const SizedBox(height: 24),
               Text(
                 'Dán link subscription hoặc quét mã QR\nđể bắt đầu sử dụng',
                 textAlign: TextAlign.center,
