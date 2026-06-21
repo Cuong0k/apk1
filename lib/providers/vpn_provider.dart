@@ -23,8 +23,10 @@ class VpnProvider extends ChangeNotifier {
   String? _error;
   bool _autoSelect = false;
   bool _userDisconnecting = false;
+  bool _checking = false;
   String? _savedSelectedUri;
   DateTime? _lastUpdated;
+  Timer? _pingTimer;
 
   VpnState get state => _state;
   List<Server> get servers => _servers;
@@ -82,7 +84,62 @@ class VpnProvider extends ChangeNotifier {
       notificationIconResourceName: 'ic_launcher',
     );
     _initialized = true;
+    _startPingMonitor();
     notifyListeners();
+  }
+
+  // ── Background ping monitor (chạy cả khi app nền, vì có foreground VPN service) ──
+
+  void _startPingMonitor() {
+    _pingTimer?.cancel();
+    _pingTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+      if (_autoSelect && _state == VpnState.connected && _servers.length > 1 && !_checking) {
+        _checkAndSwitch();
+      }
+    });
+  }
+
+  Future<void> _checkAndSwitch() async {
+    if (_checking) return;
+    _checking = true;
+    try {
+      // Ping song song tất cả server (2s timeout)
+      final results = await Future.wait(
+        _servers.map((s) async => (server: s, ping: await _pingDirect(s))),
+      );
+
+      Server? best;
+      int bestPing = 99999;
+      for (final r in results) {
+        if (r.ping > 0 && r.ping < bestPing) {
+          bestPing = r.ping;
+          best = r.server;
+        }
+      }
+
+      final currentPing = (_selected?.ping == null || _selected!.ping <= 0)
+          ? 99999
+          : _selected!.ping;
+
+      // Chuyển nếu server khác nhanh hơn ≥50ms
+      if (best != null &&
+          best.rawUri != (_selected?.rawUri ?? '') &&
+          bestPing < currentPing - 50) {
+        _selected = best;
+        notifyListeners();
+        // Reconnect trực tiếp tới server đã chọn (không re-ping)
+        _userDisconnecting = true;
+        await _v2ray.stopV2Ray();
+        _state = VpnState.disconnected;
+        notifyListeners();
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _userDisconnecting = false;
+          connect();
+        });
+      }
+    } finally {
+      _checking = false;
+    }
   }
 
   // ── Server loading ───────────────────────────────────────────────────────
@@ -298,5 +355,11 @@ class VpnProvider extends ChangeNotifier {
     if (bps >= 1048576)    return '${(bps / 1048576).toStringAsFixed(1)} MB/s';
     if (bps >= 1024)       return '${(bps / 1024).toStringAsFixed(0)} KB/s';
     return '${bps.toStringAsFixed(0)} B/s';
+  }
+
+  @override
+  void dispose() {
+    _pingTimer?.cancel();
+    super.dispose();
   }
 }
