@@ -121,10 +121,10 @@ class VpnProvider extends ChangeNotifier {
           ? 99999
           : _selected!.ping;
 
-      // Chuyển nếu server khác nhanh hơn ≥50ms
+      // Chuyển nếu server khác nhanh hơn ≥20ms (ping giờ đo trực tiếp, không qua tunnel)
       if (best != null &&
           best.rawUri != (_selected?.rawUri ?? '') &&
-          bestPing < currentPing - 50) {
+          bestPing < currentPing - 20) {
         _selected = best;
         notifyListeners();
         await _fastSwitch(); // stop → start ngay, không delay
@@ -253,7 +253,7 @@ class VpnProvider extends ChangeNotifier {
       await _v2ray.startV2Ray(
         remark: _autoSelect ? 'Auto - ${_selected!.name}' : _selected!.name,
         config: config,
-        blockedApps: null,
+        blockedApps: ['com.vpnstore.app'], // app tự bypass VPN → ping đo trực tiếp, không qua tunnel
         bypassSubnets: null,
       );
     } catch (e) {
