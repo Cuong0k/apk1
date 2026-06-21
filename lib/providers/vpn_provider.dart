@@ -6,7 +6,6 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/xray_config_builder.dart';
 
-// Protocols natively supported by flutter_v2ray URL parser
 const _nativeProtocols = {'vless', 'vmess', 'trojan', 'ss'};
 
 enum VpnState { disconnected, connecting, connected }
@@ -21,6 +20,8 @@ class VpnProvider extends ChangeNotifier {
   bool _initialized = false;
   Map<String, dynamic> _settings = {};
   String? _error;
+  bool _autoSelect = false;
+  DateTime? _lastUpdated;
 
   VpnState get state => _state;
   List<Server> get servers => _servers;
@@ -29,6 +30,8 @@ class VpnProvider extends ChangeNotifier {
   bool get isConnected => _state == VpnState.connected;
   Map<String, dynamic> get settings => _settings;
   String? get error => _error;
+  bool get autoSelect => _autoSelect;
+  DateTime? get lastUpdated => _lastUpdated;
 
   VpnProvider() {
     _v2ray = FlutterV2ray(
@@ -59,16 +62,47 @@ class VpnProvider extends ChangeNotifier {
     try {
       final sub = await ApiService.getSubscription(subToken, authData: authData);
       _servers = Server.parseSubscription(sub);
-      if (_servers.isNotEmpty && _selected == null) {
+      if (_servers.isNotEmpty && _selected == null && !_autoSelect) {
         _selected = _servers.first;
       }
+      _lastUpdated = DateTime.now();
       notifyListeners();
     } catch (_) {}
   }
 
+  // Select a specific server — if VPN is on, reconnect with new server
   void selectServer(Server server) {
+    final wasConnected = _state == VpnState.connected;
+    _autoSelect = false;
     _selected = server;
     notifyListeners();
+    if (wasConnected) {
+      disconnect().then((_) => connect());
+    }
+  }
+
+  // Enable auto-select mode: ping all servers in background and pick best
+  void setAutoSelect() {
+    _autoSelect = true;
+    _selected = null;
+    notifyListeners();
+    _pingAndPickBest();
+  }
+
+  Future<void> _pingAndPickBest() async {
+    Server? best;
+    int bestPing = 99999;
+    for (final s in _servers) {
+      final p = await pingServer(s);
+      if (p > 0 && p < bestPing) {
+        bestPing = p;
+        best = s;
+      }
+    }
+    if (best != null && _autoSelect) {
+      _selected = best;
+      notifyListeners();
+    }
   }
 
   Future<void> toggleVpn() async {
@@ -93,15 +127,12 @@ class VpnProvider extends ChangeNotifier {
     try {
       final String config;
       if (_nativeProtocols.contains(_selected!.protocol)) {
-        // Dùng flutter_v2ray URL parser cho VLESS/VMess/Trojan/SS
-        final v2rayUrl = FlutterV2ray.parseFromURL(_selected!.rawUri);
-        config = v2rayUrl.getFullConfiguration();
+        config = FlutterV2ray.parseFromURL(_selected!.rawUri).getFullConfiguration();
       } else {
-        // Dùng custom builder cho TUIC/Hysteria2/AnyTLS
         config = XrayConfigBuilder.build(_selected!, _settings);
       }
       await _v2ray.startV2Ray(
-        remark: _selected!.name,
+        remark: _autoSelect ? 'Auto - ${_selected!.name}' : _selected!.name,
         config: config,
         blockedApps: null,
         bypassSubnets: null,
@@ -119,7 +150,6 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// TCP ping — đo độ trễ kết nối tới server (không cần VPN đang chạy)
   Future<int> pingServer(Server server) async {
     final start = DateTime.now().millisecondsSinceEpoch;
     try {

@@ -55,8 +55,10 @@ class _ServerListScreenState extends State<ServerListScreen> {
           if (_pingingAll)
             const Padding(
               padding: EdgeInsets.all(14),
-              child: SizedBox(width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent)),
+              child: SizedBox(
+                width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent),
+              ),
             )
           else
             IconButton(
@@ -85,10 +87,13 @@ class _ServerListScreenState extends State<ServerListScreen> {
             )
           : ListView.builder(
               padding: const EdgeInsets.all(12),
-              itemCount: vpn.servers.length,
+              // +1 for the Auto option at index 0
+              itemCount: vpn.servers.length + 1,
               itemBuilder: (context, index) {
-                final server = vpn.servers[index];
-                final isSelected = vpn.selected?.rawUri == server.rawUri;
+                if (index == 0) return _buildAutoCard(vpn);
+
+                final server = vpn.servers[index - 1];
+                final isSelected = !vpn.autoSelect && vpn.selected?.rawUri == server.rawUri;
                 final isPinging = _pinging.contains(server.rawUri);
 
                 return Card(
@@ -101,23 +106,7 @@ class _ServerListScreenState extends State<ServerListScreen> {
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        color: _protocolColor(server.protocol).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Text(
-                          server.protocol.toUpperCase().substring(0, 2),
-                          style: TextStyle(
-                            color: _protocolColor(server.protocol),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
+                    leading: _ProtocolBadge(protocol: server.protocol),
                     title: Text(
                       server.name,
                       style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
@@ -133,8 +122,10 @@ class _ServerListScreenState extends State<ServerListScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: isPinging
-                            ? const SizedBox(width: 14, height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                                width: 14, height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
                             : Text(
                                 server.ping == -1 ? 'Ping' : '${server.ping}ms',
                                 style: TextStyle(
@@ -156,15 +147,62 @@ class _ServerListScreenState extends State<ServerListScreen> {
     );
   }
 
+  Widget _buildAutoCard(VpnProvider vpn) {
+    final isActive = vpn.autoSelect;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 4, top: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isActive
+            ? const BorderSide(color: AppTheme.accent, width: 1.5)
+            : BorderSide.none,
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+            color: AppTheme.accent.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.auto_awesome, color: AppTheme.accent, size: 20),
+        ),
+        title: const Text(
+          'Tự động',
+          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        subtitle: Text(
+          isActive && vpn.selected != null
+              ? '→ ${vpn.selected!.name}'
+              : 'Chọn máy chủ tốt nhất',
+          style: const TextStyle(color: Colors.white38, fontSize: 12),
+        ),
+        trailing: isActive
+            ? const Icon(Icons.check_circle, color: AppTheme.accent)
+            : const Icon(Icons.chevron_right, color: Colors.white24),
+        onTap: () {
+          vpn.setAutoSelect();
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
   Color _pingColor(int ping) {
     if (ping == -1) return Colors.white38;
     if (ping < 100) return AppTheme.connected;
     if (ping < 300) return Colors.orange;
     return AppTheme.disconnected;
   }
+}
 
-  Color _protocolColor(String protocol) {
-    return switch (protocol) {
+class _ProtocolBadge extends StatelessWidget {
+  final String protocol;
+  const _ProtocolBadge({required this.protocol});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (protocol) {
       'vless'  => AppTheme.accent,
       'vmess'  => Colors.purple,
       'trojan' => Colors.orange,
@@ -172,7 +210,18 @@ class _ServerListScreenState extends State<ServerListScreen> {
       'tuic'   => Colors.blue,
       'hy2'    => Colors.pink,
       'anytls' => Colors.teal,
-      _ => Colors.white38,
+      _        => Colors.white38,
     };
+    final label = protocol.length >= 2 ? protocol.toUpperCase().substring(0, 2) : protocol.toUpperCase();
+    return Container(
+      width: 40, height: 40,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Center(
+        child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+      ),
+    );
   }
 }

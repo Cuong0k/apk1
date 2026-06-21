@@ -3,8 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crypto/crypto.dart';
 
 class StorageService {
-  static const _keyAuthData = 'auth_data';   // JWT Bearer token cho API
-  static const _keySubToken = 'sub_token';   // plain token cho subscription URL
+  static const _keyAuthData = 'auth_data';
+  static const _keySubToken = 'sub_token';
   static const _keyEmail    = 'auth_email';
   static const _keySettings = 'vpn_settings';
 
@@ -60,7 +60,13 @@ class StorageService {
     final raw = prefs.getString(_keySettings);
     if (raw == null) return _defaultSettings();
     try {
-      return Map<String, dynamic>.from(jsonDecode(raw));
+      final saved = Map<String, dynamic>.from(jsonDecode(raw));
+      // Merge with defaults so new keys are always present
+      final defaults = _defaultSettings();
+      for (final key in defaults.keys) {
+        saved.putIfAbsent(key, () => defaults[key]);
+      }
+      return saved;
     } catch (_) {
       return _defaultSettings();
     }
@@ -81,5 +87,8 @@ class StorageService {
     'tcp_fast_open': true,
     'allow_insecure': false,
     'dns_hijack': true,
+    'sniffing': true,
+    'routing_mode': 'global',
+    'log_level': 'error',
   };
 }

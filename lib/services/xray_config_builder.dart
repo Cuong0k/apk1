@@ -16,17 +16,29 @@ class XrayConfigBuilder {
   // ---- Base config ----
 
   static Map<String, dynamic> _baseConfig(Map<String, dynamic> s) {
-    final dns1 = s['dns_primary'] ?? '1.1.1.1';
-    final dns2 = s['dns_secondary'] ?? '8.8.8.8';
-    final bypassLan = s['domain_bypass'] ?? true;
-    final udp = s['udp_enabled'] ?? true;
-    final mtu = s['mtu'] ?? 1350;
+    final dns1         = s['dns_primary']   ?? '8.8.8.8';
+    final dns2         = s['dns_secondary'] ?? '1.1.1.1';
+    final bypassLan    = s['domain_bypass'] ?? true;
+    final udp          = s['udp_enabled']   ?? true;
+    final ipv6         = s['ipv6_enabled']  ?? true;
+    final sniffing     = s['sniffing']      ?? true;
+    final logLevel     = s['log_level']     ?? 'error';
+    final routingMode  = s['routing_mode']  ?? 'global';
+
+    final routingRules = <Map<String, dynamic>>[];
+    if (bypassLan || routingMode == 'rules') {
+      routingRules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
+    }
+    if (routingMode == 'rules') {
+      routingRules.add({'type': 'field', 'ip': ['geoip:vn'], 'outboundTag': 'direct'});
+      routingRules.add({'type': 'field', 'domain': ['geosite:vn'], 'outboundTag': 'direct'});
+    }
 
     return {
-      'log': {'loglevel': 'warning'},
+      'log': {'loglevel': logLevel == 'none' ? 'none' : logLevel},
       'dns': {
         'servers': [dns1, dns2, 'localhost'],
-        'queryStrategy': 'UseIPv4',
+        'queryStrategy': ipv6 ? 'UseIP' : 'UseIPv4',
       },
       'inbounds': [
         {
@@ -35,7 +47,10 @@ class XrayConfigBuilder {
           'listen': '127.0.0.1',
           'protocol': 'socks',
           'settings': {'auth': 'noauth', 'udp': udp},
-          'sniffing': {'enabled': true, 'destOverride': ['http', 'tls', 'quic']},
+          'sniffing': {
+            'enabled': sniffing,
+            'destOverride': ['http', 'tls', 'quic'],
+          },
         },
         {
           'tag': 'http',
@@ -48,11 +63,7 @@ class XrayConfigBuilder {
       'outbounds': [],
       'routing': {
         'domainStrategy': 'IPIfNonMatch',
-        'rules': [
-          if (bypassLan) ...[
-            {'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'},
-          ],
-        ],
+        'rules': routingRules,
       },
       'transport': {},
     };
