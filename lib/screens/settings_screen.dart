@@ -38,9 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    if (!_loaded) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
       appBar: AppBar(
@@ -56,106 +54,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         children: [
 
-          // ── Kết nối ──────────────────────────────────────────────────────
           _Header('Kết nối'),
           Card(
             child: Column(
               children: [
-                _Switch(
-                  icon: Icons.speed_outlined,
-                  title: 'Hỗ trợ UDP',
-                  sub: 'Cần cho game, DNS, cuộc gọi video',
+                _Switch(icon: Icons.speed_outlined,
+                  title: 'Hỗ trợ UDP', sub: 'Cần cho game, DNS, cuộc gọi video',
                   value: _s['udp_enabled'] ?? true,
-                  onChange: (v) => setState(() => _s['udp_enabled'] = v),
-                ),
+                  onChange: (v) => setState(() => _s['udp_enabled'] = v)),
                 _Div(),
-                _Switch(
-                  icon: Icons.network_check_outlined,
-                  title: 'Hỗ trợ IPv6',
-                  sub: 'Cho phép lưu lượng IPv6 qua VPN',
+                _Switch(icon: Icons.network_check_outlined,
+                  title: 'Hỗ trợ IPv6', sub: 'Cho phép lưu lượng IPv6 qua VPN',
                   value: _s['ipv6_enabled'] ?? true,
-                  onChange: (v) => setState(() => _s['ipv6_enabled'] = v),
-                ),
+                  onChange: (v) => setState(() => _s['ipv6_enabled'] = v)),
                 _Div(),
-                _Switch(
-                  icon: Icons.lan_outlined,
-                  title: 'Bỏ qua mạng LAN',
-                  sub: 'Truy cập nội bộ không qua VPN',
+                _Switch(icon: Icons.lan_outlined,
+                  title: 'Bỏ qua mạng LAN', sub: 'Truy cập nội bộ không qua VPN',
                   value: _s['domain_bypass'] ?? true,
-                  onChange: (v) => setState(() => _s['domain_bypass'] = v),
-                ),
+                  onChange: (v) => setState(() => _s['domain_bypass'] = v)),
               ],
             ),
           ),
 
           const SizedBox(height: 16),
-
-          // ── Định tuyến ───────────────────────────────────────────────────
           _Header('Định tuyến'),
           Card(
             child: _Dropdown(
               icon: Icons.alt_route_outlined,
               title: 'Chế độ định tuyến',
-              sub: switch (_s['routing_mode'] ?? 'global') {
-                'global' => 'Tất cả lưu lượng qua VPN',
-                'rules'  => 'Bỏ qua VN/LAN, proxy phần còn lại',
-                _        => '',
-              },
+              sub: (_s['routing_mode'] ?? 'global') == 'global'
+                  ? 'Tất cả lưu lượng qua VPN'
+                  : 'Bỏ qua VN/LAN, proxy phần còn lại',
               value: _s['routing_mode'] ?? 'global',
               options: const [
                 _Opt('global', 'Toàn cầu'),
-                _Opt('rules',  'Quy tắc (Bypass VN)'),
+                _Opt('rules', 'Quy tắc (Bypass VN)'),
               ],
               onChange: (v) => setState(() => _s['routing_mode'] = v),
             ),
           ),
 
           const SizedBox(height: 16),
-
-          // ── DNS ──────────────────────────────────────────────────────────
           _Header('DNS'),
           Card(
             child: Column(
               children: [
-                _Switch(
-                  icon: Icons.dns_outlined,
-                  title: 'Chặn bắt DNS',
-                  sub: 'Định tuyến DNS qua VPN, tránh rò rỉ',
+                _Switch(icon: Icons.dns_outlined,
+                  title: 'Chặn bắt DNS', sub: 'Định tuyến DNS qua VPN, tránh rò rỉ',
                   value: _s['dns_hijack'] ?? true,
-                  onChange: (v) => setState(() => _s['dns_hijack'] = v),
-                ),
+                  onChange: (v) => setState(() => _s['dns_hijack'] = v)),
                 _Div(),
-                _Text(
-                  icon: Icons.looks_one_outlined,
+                _TextField(icon: Icons.looks_one_outlined,
                   title: 'DNS chính',
-                  value: _s['dns_primary'] ?? '8.8.8.8',
-                  onChange: (v) => setState(() => _s['dns_primary'] = v),
-                ),
+                  value: _s['dns_primary'] ?? '1.1.1.1',
+                  onChange: (v) => setState(() => _s['dns_primary'] = v)),
                 _Div(),
-                _Text(
-                  icon: Icons.looks_two_outlined,
+                _TextField(icon: Icons.looks_two_outlined,
                   title: 'DNS phụ',
-                  value: _s['dns_secondary'] ?? '1.1.1.1',
-                  onChange: (v) => setState(() => _s['dns_secondary'] = v),
-                ),
+                  value: _s['dns_secondary'] ?? '8.8.8.8',
+                  onChange: (v) => setState(() => _s['dns_secondary'] = v)),
               ],
             ),
           ),
 
           const SizedBox(height: 16),
-
-          // ── Tối ưu TCP ───────────────────────────────────────────────────
           _Header('Tối ưu TCP'),
           Card(
             child: Column(
               children: [
-                _Switch(
-                  icon: Icons.flash_on_outlined,
-                  title: 'TCP Fast Open',
-                  sub: 'Giảm độ trễ kết nối TCP',
+                _Switch(icon: Icons.flash_on_outlined,
+                  title: 'TCP Fast Open', sub: 'Giảm độ trễ kết nối TCP',
                   value: _s['tcp_fast_open'] ?? true,
-                  onChange: (v) => setState(() => _s['tcp_fast_open'] = v),
-                ),
+                  onChange: (v) => setState(() => _s['tcp_fast_open'] = v)),
                 _Div(),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -166,19 +136,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         children: [
                           const Icon(Icons.tune_outlined, color: AppTheme.accent, size: 22),
                           const SizedBox(width: 12),
-                          const Text('MTU', style: TextStyle(color: Colors.white, fontSize: 14)),
+                          Text('MTU', style: TextStyle(color: context.c1, fontSize: 14)),
                           const Spacer(),
-                          Text(
-                            '${_s['mtu'] ?? 1350}',
-                            style: const TextStyle(color: AppTheme.accent, fontSize: 14, fontWeight: FontWeight.w600),
-                          ),
+                          Text('${_s['mtu'] ?? 1350}',
+                            style: const TextStyle(color: AppTheme.accent, fontSize: 14, fontWeight: FontWeight.w600)),
                         ],
                       ),
                       Slider(
                         value: (_s['mtu'] ?? 1350).toDouble(),
-                        min: 576,
-                        max: 1500,
-                        divisions: 92,
+                        min: 576, max: 1500, divisions: 92,
                         activeColor: AppTheme.accent,
                         onChanged: (v) => setState(() => _s['mtu'] = v.round()),
                       ),
@@ -190,31 +156,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           const SizedBox(height: 16),
-
-          // ── Nâng cao ─────────────────────────────────────────────────────
           _Header('Nâng cao'),
           Card(
             child: Column(
               children: [
-                _Switch(
-                  icon: Icons.manage_search_outlined,
+                _Switch(icon: Icons.manage_search_outlined,
                   title: 'Sniffing (Tìm tiến trình)',
                   sub: 'Phát hiện giao thức và domain tự động',
                   value: _s['sniffing'] ?? true,
-                  onChange: (v) => setState(() => _s['sniffing'] = v),
-                ),
+                  onChange: (v) => setState(() => _s['sniffing'] = v)),
                 _Div(),
                 _Dropdown(
                   icon: Icons.terminal_outlined,
-                  title: 'Mức nhật ký',
-                  sub: 'Mức độ chi tiết của log xray',
+                  title: 'Mức nhật ký', sub: 'Mức độ chi tiết của log xray',
                   value: _s['log_level'] ?? 'error',
                   options: const [
-                    _Opt('none',    'Tắt'),
-                    _Opt('error',   'Lỗi (khuyến nghị)'),
+                    _Opt('none', 'Tắt'),
+                    _Opt('error', 'Lỗi (khuyến nghị)'),
                     _Opt('warning', 'Cảnh báo'),
-                    _Opt('info',    'Thông tin'),
-                    _Opt('debug',   'Debug'),
+                    _Opt('info', 'Thông tin'),
+                    _Opt('debug', 'Debug'),
                   ],
                   onChange: (v) => setState(() => _s['log_level'] = v),
                 ),
@@ -223,17 +184,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           const SizedBox(height: 16),
-
-          // ── Bảo mật ──────────────────────────────────────────────────────
           _Header('Bảo mật'),
           Card(
-            child: _Switch(
-              icon: Icons.security_outlined,
-              title: 'Bỏ qua xác minh TLS',
-              sub: 'Chỉ bật khi dùng cert tự ký',
+            child: _Switch(icon: Icons.security_outlined,
+              title: 'Bỏ qua xác minh TLS', sub: 'Chỉ bật khi dùng cert tự ký',
               value: _s['allow_insecure'] ?? false,
-              onChange: (v) => setState(() => _s['allow_insecure'] = v),
-            ),
+              onChange: (v) => setState(() => _s['allow_insecure'] = v)),
           ),
 
           const SizedBox(height: 24),
@@ -243,7 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// ─── Shared widget helpers ───────────────────────────────────────────────────
+// ─── Widgets ─────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
   final String text;
@@ -251,15 +207,14 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
-    child: Text(text,
-        style: const TextStyle(color: AppTheme.accent, fontSize: 13, fontWeight: FontWeight.w600)),
+    child: Text(text, style: const TextStyle(color: AppTheme.accent, fontSize: 13, fontWeight: FontWeight.w600)),
   );
 }
 
 class _Div extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
-      const Divider(height: 1, indent: 50, color: Colors.white12);
+      Divider(height: 1, indent: 50, color: context.c4);
 }
 
 class _Switch extends StatelessWidget {
@@ -268,11 +223,12 @@ class _Switch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChange;
   const _Switch({required this.icon, required this.title, required this.sub, required this.value, required this.onChange});
+
   @override
   Widget build(BuildContext context) => SwitchListTile(
     secondary: Icon(icon, color: AppTheme.accent, size: 22),
-    title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 14)),
-    subtitle: Text(sub, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+    title: Text(title, style: TextStyle(color: context.c1, fontSize: 14)),
+    subtitle: Text(sub, style: TextStyle(color: context.c3, fontSize: 12)),
     value: value,
     onChanged: onChange,
     activeColor: AppTheme.accent,
@@ -280,22 +236,23 @@ class _Switch extends StatelessWidget {
   );
 }
 
-class _Text extends StatelessWidget {
+class _TextField extends StatelessWidget {
   final IconData icon;
   final String title, value;
   final ValueChanged<String> onChange;
-  const _Text({required this.icon, required this.title, required this.value, required this.onChange});
+  const _TextField({required this.icon, required this.title, required this.value, required this.onChange});
+
   @override
   Widget build(BuildContext context) => ListTile(
     leading: Icon(icon, color: AppTheme.accent, size: 22),
-    title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 14)),
+    title: Text(title, style: TextStyle(color: context.c1, fontSize: 14)),
     trailing: SizedBox(
       width: 120,
       child: TextFormField(
         initialValue: value,
         textAlign: TextAlign.end,
         style: const TextStyle(color: AppTheme.accent, fontSize: 14),
-        decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+        decoration: const InputDecoration(isDense: true, border: InputBorder.none, contentPadding: EdgeInsets.zero),
         onChanged: onChange,
       ),
     ),
@@ -313,19 +270,18 @@ class _Dropdown extends StatelessWidget {
   final List<_Opt> options;
   final ValueChanged<String> onChange;
   const _Dropdown({required this.icon, required this.title, required this.sub, required this.value, required this.options, required this.onChange});
+
   @override
   Widget build(BuildContext context) => ListTile(
     leading: Icon(icon, color: AppTheme.accent, size: 22),
-    title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 14)),
-    subtitle: Text(sub, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+    title: Text(title, style: TextStyle(color: context.c1, fontSize: 14)),
+    subtitle: Text(sub, style: TextStyle(color: context.c3, fontSize: 12)),
     trailing: DropdownButton<String>(
       value: value,
-      dropdownColor: const Color(0xFF1E2235),
-      style: const TextStyle(color: AppTheme.accent, fontSize: 13),
+      dropdownColor: context.cardBg,
+      style: TextStyle(color: AppTheme.accent, fontSize: 13),
       underline: const SizedBox(),
-      items: options
-          .map((o) => DropdownMenuItem(value: o.value, child: Text(o.label)))
-          .toList(),
+      items: options.map((o) => DropdownMenuItem(value: o.value, child: Text(o.label))).toList(),
       onChanged: (v) { if (v != null) onChange(v); },
     ),
   );

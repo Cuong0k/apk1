@@ -55,8 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 16,
-        title: Image.asset('assets/logo.png', height: 32),
+        title: const Text('VPNStore', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: Icon(theme.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),

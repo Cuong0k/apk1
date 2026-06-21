@@ -22,6 +22,7 @@ class VpnProvider extends ChangeNotifier {
   Map<String, dynamic> _settings = {};
   String? _error;
   bool _autoSelect = false;
+  bool _userDisconnecting = false;
   DateTime? _lastUpdated;
   Timer? _pingTimer;
 
@@ -46,12 +47,22 @@ class VpnProvider extends ChangeNotifier {
   VpnProvider() {
     _v2ray = FlutterV2ray(
       onStatusChanged: (status) {
+        final prevState = _state;
         _status = status;
         _state = switch (status.state) {
           'CONNECTED'  => VpnState.connected,
           'CONNECTING' => VpnState.connecting,
           _            => VpnState.disconnected,
         };
+        // Auto-reconnect when connection drops unexpectedly in auto-select mode
+        if (_autoSelect &&
+            prevState == VpnState.connected &&
+            _state == VpnState.disconnected &&
+            !_userDisconnecting) {
+          Future.delayed(const Duration(seconds: 3), () {
+            if (_state == VpnState.disconnected && _autoSelect) connect();
+          });
+        }
         notifyListeners();
       },
     );
@@ -90,12 +101,14 @@ class VpnProvider extends ChangeNotifier {
         best = s;
       }
     }
-    final currentPing = _selected?.ping ?? 99999;
-    // Only switch if another server is ≥50ms faster AND current is laggy (>200ms)
+    // Treat no-ping or failed ping on current server as very high latency
+    final currentPing = (_selected?.ping == null || _selected!.ping <= 0)
+        ? 99999
+        : _selected!.ping;
+    // Switch if another server is ≥50ms faster than current (no absolute threshold)
     if (best != null &&
         best.host != (_selected?.host ?? '') &&
-        bestPing < currentPing - 50 &&
-        currentPing > 200) {
+        bestPing < currentPing - 50) {
       _selected = best;
       notifyListeners();
       await _reconnect();
@@ -211,7 +224,9 @@ class VpnProvider extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _userDisconnecting = true;
     await _v2ray.stopV2Ray();
+    _userDisconnecting = false;
     _state = VpnState.disconnected;
     notifyListeners();
   }
