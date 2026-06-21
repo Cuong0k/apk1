@@ -23,7 +23,8 @@ class VpnProvider extends ChangeNotifier {
   String? _error;
   bool _autoSelect = false;
   bool _userDisconnecting = false;
-  String? _savedSelectedUri;   // restored from storage, matched after loadServers
+  bool _checking = false;          // prevent concurrent _checkAndSwitch
+  String? _savedSelectedUri;
   DateTime? _lastUpdated;
   Timer? _pingTimer;
 
@@ -37,7 +38,6 @@ class VpnProvider extends ChangeNotifier {
   bool get autoSelect => _autoSelect;
   DateTime? get lastUpdated => _lastUpdated;
 
-  // Combined upload+download speed formatted as "X KB/s" / "X MB/s"
   String get totalSpeedStr {
     if (_status == null) return '';
     final up   = _parseSpeedBps(_status!.uploadSpeed.toString());
@@ -55,7 +55,7 @@ class VpnProvider extends ChangeNotifier {
           'CONNECTING' => VpnState.connecting,
           _            => VpnState.disconnected,
         };
-        // Auto-reconnect when connection drops unexpectedly in auto-select mode
+        // Auto-reconnect on unexpected drop (not user-initiated)
         if (_autoSelect &&
             prevState == VpnState.connected &&
             _state == VpnState.disconnected &&
@@ -88,34 +88,44 @@ class VpnProvider extends ChangeNotifier {
 
   void _startPingMonitor() {
     _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (_autoSelect && _state == VpnState.connected && _servers.length > 1) {
+    _pingTimer = Timer.periodic(const Duration(seconds: 90), (_) {
+      if (_autoSelect && _state == VpnState.connected && _servers.length > 1 && !_checking) {
         _checkAndSwitch();
       }
     });
   }
 
   Future<void> _checkAndSwitch() async {
-    Server? best;
-    int bestPing = 99999;
-    for (final s in _servers) {
-      final p = await pingServer(s);
-      if (p > 0 && p < bestPing) {
-        bestPing = p;
-        best = s;
+    if (_checking) return;
+    _checking = true;
+    try {
+      // Ping all servers in parallel (2s timeout each)
+      final results = await Future.wait(
+        _servers.map((s) async => (server: s, ping: await _pingDirect(s))),
+      );
+
+      Server? best;
+      int bestPing = 99999;
+      for (final r in results) {
+        if (r.ping > 0 && r.ping < bestPing) {
+          bestPing = r.ping;
+          best = r.server;
+        }
       }
-    }
-    // Treat no-ping or failed ping on current server as very high latency
-    final currentPing = (_selected?.ping == null || _selected!.ping <= 0)
-        ? 99999
-        : _selected!.ping;
-    // Switch if another server is ≥30ms faster than current
-    if (best != null &&
-        best.rawUri != (_selected?.rawUri ?? '') &&
-        bestPing < currentPing - 30) {
-      _selected = best;
-      notifyListeners();
-      await _reconnect();
+
+      final currentPing = (_selected?.ping == null || _selected!.ping <= 0)
+          ? 99999
+          : _selected!.ping;
+
+      if (best != null &&
+          best.rawUri != (_selected?.rawUri ?? '') &&
+          bestPing < currentPing - 30) {
+        _selected = best;
+        notifyListeners();
+        await _reconnect();
+      }
+    } finally {
+      _checking = false;
     }
   }
 
@@ -125,7 +135,6 @@ class VpnProvider extends ChangeNotifier {
     try {
       final sub = await ApiService.getSubscription(subToken, authData: authData);
       _servers = Server.parseSubscription(sub);
-      // Restore previously selected server
       if (_savedSelectedUri != null && !_autoSelect) {
         _selected = _servers.firstWhere(
           (s) => s.rawUri == _savedSelectedUri,
@@ -163,20 +172,23 @@ class VpnProvider extends ChangeNotifier {
 
   Future<void> _reconnect() async {
     await disconnect();
-    await Future.delayed(const Duration(milliseconds: 800));
     await connect();
   }
 
   // ── VPN control ──────────────────────────────────────────────────────────
 
   Future<void> _pingAndPickBest() async {
+    // Ping all servers in parallel (2s timeout each)
+    final results = await Future.wait(
+      _servers.map((s) async => (server: s, ping: await _pingDirect(s))),
+    );
+
     Server? best;
     int bestPing = 99999;
-    for (final s in _servers) {
-      final p = await pingServer(s);
-      if (p > 0 && p < bestPing) {
-        bestPing = p;
-        best = s;
+    for (final r in results) {
+      if (r.ping > 0 && r.ping < bestPing) {
+        bestPing = r.ping;
+        best = r.server;
       }
     }
     _selected = best ?? (_servers.isNotEmpty ? _servers.first : null);
@@ -197,7 +209,6 @@ class VpnProvider extends ChangeNotifier {
     if (_autoSelect && _servers.isEmpty) return;
     _error = null;
 
-    // Always re-ping in auto-select mode to pick current best server
     if (_autoSelect) {
       _selected = null;
       _state = VpnState.connecting;
@@ -240,13 +251,36 @@ class VpnProvider extends ChangeNotifier {
   Future<void> disconnect() async {
     _userDisconnecting = true;
     await _v2ray.stopV2Ray();
-    _userDisconnecting = false;
     _state = VpnState.disconnected;
     notifyListeners();
+    // Keep flag true for 2s — onStatusChanged may fire late via platform channel
+    Future.delayed(const Duration(seconds: 2), () => _userDisconnecting = false);
   }
 
   // ── Ping ─────────────────────────────────────────────────────────────────
 
+  // Direct TCP ping with 2s timeout (used for fast parallel pinging)
+  Future<int> _pingDirect(Server server) async {
+    final start = DateTime.now().millisecondsSinceEpoch;
+    try {
+      final socket = await Socket.connect(
+        server.host,
+        server.port,
+        timeout: const Duration(seconds: 2),
+      );
+      final delay = DateTime.now().millisecondsSinceEpoch - start;
+      socket.destroy();
+      server.ping = delay;
+      notifyListeners();
+      return delay;
+    } catch (_) {
+      server.ping = -1;
+      notifyListeners();
+      return -1;
+    }
+  }
+
+  // Public ping (used from UI, 5s timeout for accuracy)
   Future<int> pingServer(Server server) async {
     final start = DateTime.now().millisecondsSinceEpoch;
     try {
@@ -277,7 +311,6 @@ class VpnProvider extends ChangeNotifier {
 
   // ── Speed helpers ─────────────────────────────────────────────────────────
 
-  // Parse "1.2 KB/s", "3.4 MB/s", or plain "1234" (bytes/s)
   double _parseSpeedBps(String s) {
     final t = s.trim();
     final plain = double.tryParse(t);
