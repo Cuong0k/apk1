@@ -74,10 +74,12 @@ class StorageService {
   static Map<String, dynamic> _defaultSettings() => {
     'mtu': 1350,
     'udp_enabled': true,
+    'ipv6_enabled': true,
     'domain_bypass': true,
-    'dns_primary': '1.1.1.1',
-    'dns_secondary': '8.8.8.8',
-    'tcp_fast_open': false,
+    'dns_primary': '8.8.8.8',
+    'dns_secondary': '1.1.1.1',
+    'tcp_fast_open': true,
     'allow_insecure': false,
+    'dns_hijack': true,
   };
 }

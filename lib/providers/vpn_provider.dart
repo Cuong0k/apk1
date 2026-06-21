@@ -94,7 +94,7 @@ class VpnProvider extends ChangeNotifier {
       final String config;
       if (_nativeProtocols.contains(_selected!.protocol)) {
         // Dùng flutter_v2ray URL parser cho VLESS/VMess/Trojan/SS
-        final v2rayUrl = V2RayURL.parseURL(_selected!.rawUri);
+        final v2rayUrl = FlutterV2ray.parseFromURL(_selected!.rawUri);
         config = v2rayUrl.getFullConfiguration(
           proxyOnly: false,
           bypassLan: _settings['domain_bypass'] ?? true,

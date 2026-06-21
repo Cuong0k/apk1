@@ -60,14 +60,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 _SwitchTile(
-                  title: 'Bỏ qua mạng LAN',
-                  subtitle: 'Truy cập mạng nội bộ không qua VPN',
-                  icon: Icons.lan_outlined,
-                  value: _settings['domain_bypass'] ?? true,
-                  onChanged: (v) => setState(() => _settings['domain_bypass'] = v),
-                ),
-                _Divider(),
-                _SwitchTile(
                   title: 'Hỗ trợ UDP',
                   subtitle: 'Cần cho game và cuộc gọi video',
                   icon: Icons.speed_outlined,
@@ -76,27 +68,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _Divider(),
                 _SwitchTile(
-                  title: 'TCP Fast Open',
-                  subtitle: 'Giảm độ trễ TCP khi kết nối',
-                  icon: Icons.flash_on_outlined,
-                  value: _settings['tcp_fast_open'] ?? false,
-                  onChanged: (v) => setState(() => _settings['tcp_fast_open'] = v),
+                  title: 'Hỗ trợ IPv6',
+                  subtitle: 'Cho phép lưu lượng IPv6 qua VPN',
+                  icon: Icons.network_check_outlined,
+                  value: _settings['ipv6_enabled'] ?? true,
+                  onChanged: (v) => setState(() => _settings['ipv6_enabled'] = v),
+                ),
+                _Divider(),
+                _SwitchTile(
+                  title: 'Bỏ qua mạng LAN',
+                  subtitle: 'Truy cập mạng nội bộ không qua VPN',
+                  icon: Icons.lan_outlined,
+                  value: _settings['domain_bypass'] ?? true,
+                  onChanged: (v) => setState(() => _settings['domain_bypass'] = v),
                 ),
               ],
             ),
           ),
 
           const SizedBox(height: 16),
-          _SectionHeader('Bảo mật'),
+          _SectionHeader('Tối ưu TCP'),
           Card(
             child: Column(
               children: [
                 _SwitchTile(
-                  title: 'Bỏ qua xác minh TLS',
-                  subtitle: 'Chỉ bật khi dùng cert tự ký',
-                  icon: Icons.security_outlined,
-                  value: _settings['allow_insecure'] ?? false,
-                  onChanged: (v) => setState(() => _settings['allow_insecure'] = v),
+                  title: 'TCP Fast Open',
+                  subtitle: 'Giảm độ trễ kết nối TCP',
+                  icon: Icons.flash_on_outlined,
+                  value: _settings['tcp_fast_open'] ?? true,
+                  onChanged: (v) => setState(() => _settings['tcp_fast_open'] = v),
+                ),
+                _Divider(),
+                _SliderTile(
+                  title: 'MTU',
+                  subtitle: 'Kích thước gói tin: ${_settings['mtu'] ?? 1350}',
+                  value: (_settings['mtu'] ?? 1350).toDouble(),
+                  min: 576,
+                  max: 1500,
+                  divisions: 92,
+                  onChanged: (v) => setState(() => _settings['mtu'] = v.round()),
                 ),
               ],
             ),
@@ -107,15 +117,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             child: Column(
               children: [
+                _SwitchTile(
+                  title: 'Chặn bắt DNS',
+                  subtitle: 'Định tuyến DNS qua VPN, tránh rò rỉ',
+                  icon: Icons.dns_outlined,
+                  value: _settings['dns_hijack'] ?? true,
+                  onChanged: (v) => setState(() => _settings['dns_hijack'] = v),
+                ),
+                _Divider(),
                 _TextTile(
                   title: 'DNS chính',
-                  value: _settings['dns_primary'] ?? '1.1.1.1',
+                  value: _settings['dns_primary'] ?? '8.8.8.8',
                   onChanged: (v) => setState(() => _settings['dns_primary'] = v),
                 ),
                 _Divider(),
                 _TextTile(
                   title: 'DNS phụ',
-                  value: _settings['dns_secondary'] ?? '8.8.8.8',
+                  value: _settings['dns_secondary'] ?? '1.1.1.1',
                   onChanged: (v) => setState(() => _settings['dns_secondary'] = v),
                 ),
               ],
@@ -123,16 +141,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           const SizedBox(height: 16),
-          _SectionHeader('Mạng'),
+          _SectionHeader('Bảo mật'),
           Card(
-            child: _SliderTile(
-              title: 'MTU',
-              subtitle: 'Tối ưu kích thước gói tin (${_settings['mtu'] ?? 1350})',
-              value: (_settings['mtu'] ?? 1350).toDouble(),
-              min: 576,
-              max: 1500,
-              divisions: 92,
-              onChanged: (v) => setState(() => _settings['mtu'] = v.round()),
+            child: _SwitchTile(
+              title: 'Bỏ qua xác minh TLS',
+              subtitle: 'Chỉ bật khi dùng cert tự ký',
+              icon: Icons.security_outlined,
+              value: _settings['allow_insecure'] ?? false,
+              onChanged: (v) => setState(() => _settings['allow_insecure'] = v),
             ),
           ),
 
