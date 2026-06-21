@@ -217,21 +217,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     stateLabel,
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: stateColor),
                   ),
-                  if (vpn.isConnected && vpn.status != null) ...[
-                    const SizedBox(height: 8),
+                  if (vpn.isConnected && vpn.totalSpeedStr.isNotEmpty) ...[
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _SpeedBadge(
-                          icon: Icons.arrow_upward,
-                          value: vpn.status!.uploadSpeed.toString(),
-                          color: Colors.greenAccent,
-                        ),
-                        const SizedBox(width: 16),
-                        _SpeedBadge(
-                          icon: Icons.arrow_downward,
-                          value: vpn.status!.downloadSpeed.toString(),
-                          color: AppTheme.accent,
+                        const Icon(Icons.speed_rounded, size: 16, color: Colors.white54),
+                        const SizedBox(width: 6),
+                        Text(
+                          vpn.totalSpeedStr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ],
                     ),
@@ -442,20 +442,3 @@ class _InfoRow extends StatelessWidget {
   );
 }
 
-class _SpeedBadge extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final Color color;
-
-  const _SpeedBadge({required this.icon, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, size: 14, color: color),
-      const SizedBox(width: 4),
-      Text(value, style: TextStyle(color: color, fontSize: 13)),
-    ],
-  );
-}

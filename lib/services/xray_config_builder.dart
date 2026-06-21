@@ -125,6 +125,7 @@ class XrayConfigBuilder {
     return {
       'tag': 'proxy',
       'protocol': 'vmess',
+      'mux': {'enabled': true, 'concurrency': 8},
       'settings': {
         'vnext': [
           {
@@ -291,6 +292,15 @@ class XrayConfigBuilder {
   ) {
     final allowInsecure = settings['allow_insecure'] == true || p['allowInsecure'] == '1';
     final result = <String, dynamic>{'network': network, 'security': security};
+
+    // TCP optimization for weak/laggy networks
+    if (network == 'tcp' || network == 'ws' || network == 'h2' || network == 'http') {
+      result['sockopt'] = {
+        'tcpFastOpen': true,
+        'tcpKeepAliveInterval': 15,
+        'tcpKeepAliveIdle': 30,
+      };
+    }
 
     // TLS
     if (security == 'tls') {

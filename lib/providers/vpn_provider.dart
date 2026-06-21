@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
@@ -22,6 +23,7 @@ class VpnProvider extends ChangeNotifier {
   String? _error;
   bool _autoSelect = false;
   DateTime? _lastUpdated;
+  Timer? _pingTimer;
 
   VpnState get state => _state;
   List<Server> get servers => _servers;
@@ -32,6 +34,14 @@ class VpnProvider extends ChangeNotifier {
   String? get error => _error;
   bool get autoSelect => _autoSelect;
   DateTime? get lastUpdated => _lastUpdated;
+
+  // Combined upload+download speed formatted as "X KB/s" / "X MB/s"
+  String get totalSpeedStr {
+    if (_status == null) return '';
+    final up   = _parseSpeedBps(_status!.uploadSpeed.toString());
+    final down = _parseSpeedBps(_status!.downloadSpeed.toString());
+    return _formatBps(up + down);
+  }
 
   VpnProvider() {
     _v2ray = FlutterV2ray(
@@ -55,8 +65,44 @@ class VpnProvider extends ChangeNotifier {
       notificationIconResourceName: 'ic_launcher',
     );
     _initialized = true;
+    _startPingMonitor();
     notifyListeners();
   }
+
+  // ── Continuous ping monitor ──────────────────────────────────────────────
+
+  void _startPingMonitor() {
+    _pingTimer?.cancel();
+    _pingTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+      if (_autoSelect && _state == VpnState.connected && _servers.length > 1) {
+        _checkAndSwitch();
+      }
+    });
+  }
+
+  Future<void> _checkAndSwitch() async {
+    Server? best;
+    int bestPing = 99999;
+    for (final s in _servers) {
+      final p = await pingServer(s);
+      if (p > 0 && p < bestPing) {
+        bestPing = p;
+        best = s;
+      }
+    }
+    final currentPing = _selected?.ping ?? 99999;
+    // Only switch if another server is ≥50ms faster AND current is laggy (>200ms)
+    if (best != null &&
+        best.host != (_selected?.host ?? '') &&
+        bestPing < currentPing - 50 &&
+        currentPing > 200) {
+      _selected = best;
+      notifyListeners();
+      await _reconnect();
+    }
+  }
+
+  // ── Server loading ───────────────────────────────────────────────────────
 
   Future<void> loadServers(String subToken, {String? authData}) async {
     try {
@@ -70,7 +116,8 @@ class VpnProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // Select a specific server — if VPN is on, reconnect with new server
+  // ── Server selection ─────────────────────────────────────────────────────
+
   void selectServer(Server server) {
     final wasConnected = _state == VpnState.connected;
     _autoSelect = false;
@@ -79,7 +126,6 @@ class VpnProvider extends ChangeNotifier {
     if (wasConnected) _reconnect();
   }
 
-  // Enable auto-select mode — actual ping happens synchronously inside connect()
   void setAutoSelect() {
     final wasConnected = _state == VpnState.connected;
     _autoSelect = true;
@@ -94,6 +140,8 @@ class VpnProvider extends ChangeNotifier {
     await connect();
   }
 
+  // ── VPN control ──────────────────────────────────────────────────────────
+
   Future<void> _pingAndPickBest() async {
     Server? best;
     int bestPing = 99999;
@@ -104,7 +152,6 @@ class VpnProvider extends ChangeNotifier {
         best = s;
       }
     }
-    // If all timed out, fall back to first server
     _selected = best ?? (_servers.isNotEmpty ? _servers.first : null);
     notifyListeners();
   }
@@ -123,7 +170,6 @@ class VpnProvider extends ChangeNotifier {
     if (_autoSelect && _servers.isEmpty) return;
     _error = null;
 
-    // Auto-select: ping all servers FIRST then pick best
     if (_autoSelect && _selected == null) {
       _state = VpnState.connecting;
       notifyListeners();
@@ -168,6 +214,8 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Ping ─────────────────────────────────────────────────────────────────
+
   Future<int> pingServer(Server server) async {
     final start = DateTime.now().millisecondsSinceEpoch;
     try {
@@ -188,9 +236,41 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
+  // ── Settings ─────────────────────────────────────────────────────────────
+
   Future<void> updateSettings(Map<String, dynamic> settings) async {
     _settings = settings;
     await StorageService.saveSettings(settings);
     notifyListeners();
+  }
+
+  // ── Speed helpers ─────────────────────────────────────────────────────────
+
+  // Parse "1.2 KB/s", "3.4 MB/s", or plain "1234" (bytes/s)
+  double _parseSpeedBps(String s) {
+    final t = s.trim();
+    final plain = double.tryParse(t);
+    if (plain != null) return plain;
+    final parts = t.split(RegExp(r'\s+'));
+    if (parts.length < 2) return 0;
+    final num = double.tryParse(parts[0]) ?? 0;
+    final unit = parts[1].toLowerCase();
+    if (unit.startsWith('gb')) return num * 1073741824;
+    if (unit.startsWith('mb')) return num * 1048576;
+    if (unit.startsWith('kb')) return num * 1024;
+    return num;
+  }
+
+  String _formatBps(double bps) {
+    if (bps >= 1073741824) return '${(bps / 1073741824).toStringAsFixed(1)} GB/s';
+    if (bps >= 1048576)    return '${(bps / 1048576).toStringAsFixed(1)} MB/s';
+    if (bps >= 1024)       return '${(bps / 1024).toStringAsFixed(0)} KB/s';
+    return '${bps.toStringAsFixed(0)} B/s';
+  }
+
+  @override
+  void dispose() {
+    _pingTimer?.cancel();
+    super.dispose();
   }
 }
