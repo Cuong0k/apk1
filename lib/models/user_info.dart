@@ -36,6 +36,12 @@ class UserInfo {
     );
   }
 
+  bool get isActive {
+    if (planName == null) return false;
+    if (expiredAt == null) return true; // Vĩnh viễn
+    return expiredAt! > DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  }
+
   double get usedGB => (upload + download) / 1073741824;
   double get totalGB => transferEnable / 1073741824;
   double get usedPercent => totalGB > 0 ? (usedGB / totalGB).clamp(0.0, 1.0) : 0;

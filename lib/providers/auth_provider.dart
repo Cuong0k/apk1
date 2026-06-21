@@ -39,7 +39,7 @@ class AuthProvider extends ChangeNotifier {
       if (token == null) throw Exception('Không tìm thấy token trong link');
 
       if (!_isValidDomain(rawInput.trim())) {
-        throw Exception('Link không thuộc dịch vụ VPNStore\n(Chỉ chấp nhận: $_allowedHost)');
+        throw Exception('Link không thuộc dịch vụ VPNStore');
       }
 
       await _loadUser(token, save: true);

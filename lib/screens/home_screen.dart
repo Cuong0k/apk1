@@ -171,6 +171,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+            // ── Cảnh báo tài khoản không hợp lệ ──
+            if (user != null && !user.isActive)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.disconnected.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.disconnected.withOpacity(0.4)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: AppTheme.disconnected, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Tài khoản của bạn đã hết hạn hoặc chưa kích hoạt',
+                        style: TextStyle(color: AppTheme.disconnected, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // VPN Toggle
             Container(
               padding: const EdgeInsets.all(28),
@@ -182,7 +206,9 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 children: [
                   GestureDetector(
-                    onTap: vpn.state == VpnState.connecting ? null : vpn.toggleVpn,
+                    onTap: (vpn.state == VpnState.connecting || (user != null && !user.isActive))
+                        ? null
+                        : vpn.toggleVpn,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       width: 120,
@@ -234,10 +260,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Server selector row
                   InkWell(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ServerListScreen()),
-                    ),
+                    onTap: () {
+                      if (user != null && !user.isActive) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Tài khoản chưa kích hoạt hoặc đã hết hạn'),
+                            backgroundColor: AppTheme.disconnected,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ServerListScreen()),
+                      );
+                    },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       child: Row(
