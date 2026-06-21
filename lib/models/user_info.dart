@@ -28,7 +28,8 @@ class UserInfo {
       expiredAt: (json['expired_at'] as num?)?.toInt(),
       token: json['token']?.toString() ?? '',
       authData: json['auth_data']?.toString() ?? json['token']?.toString() ?? '',
-      planName: json['plan']?['name']?.toString(),
+      planName: json['plan']?['name']?.toString() ??
+                (json['plan_id'] != null && json['plan_id'] != 0 ? 'Gói VIP' : null),
     );
   }
 

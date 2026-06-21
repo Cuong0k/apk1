@@ -163,6 +163,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              const SizedBox(height: 8),
+
+              // Cập nhật VPN
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.sync, size: 16, color: AppTheme.accent),
+                  label: const Text('Cập nhật VPN', style: TextStyle(color: AppTheme.accent)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.accent, width: 1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onPressed: () async {
+                    final wasConnected = vpn.isConnected;
+                    if (wasConnected) await vpn.disconnect();
+                    await _load();
+                    if (wasConnected && vpn.servers.isNotEmpty) await vpn.connect();
+                  },
+                ),
+              ),
+
               const SizedBox(height: 16),
 
               // User info

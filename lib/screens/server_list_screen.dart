@@ -14,6 +14,7 @@ class ServerListScreen extends StatefulWidget {
 
 class _ServerListScreenState extends State<ServerListScreen> {
   bool _loading = false;
+  bool _pingingAll = false;
   final Set<String> _pinging = {};
 
   Future<void> _refresh() async {
@@ -21,9 +22,20 @@ class _ServerListScreenState extends State<ServerListScreen> {
     final auth = context.read<AuthProvider>();
     final vpn = context.read<VpnProvider>();
     if (auth.user != null) {
-      await vpn.loadServers(auth.user!.token);
+      await vpn.loadServers(auth.user!.token, authData: auth.user!.authData);
     }
     setState(() => _loading = false);
+  }
+
+  Future<void> _pingAll() async {
+    setState(() => _pingingAll = true);
+    final vpn = context.read<VpnProvider>();
+    for (final server in vpn.servers) {
+      setState(() => _pinging.add(server.rawUri));
+      await vpn.pingServer(server);
+      setState(() => _pinging.remove(server.rawUri));
+    }
+    setState(() => _pingingAll = false);
   }
 
   Future<void> _ping(Server server) async {
@@ -40,6 +52,18 @@ class _ServerListScreenState extends State<ServerListScreen> {
       appBar: AppBar(
         title: const Text('Danh sách máy chủ'),
         actions: [
+          if (_pingingAll)
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: SizedBox(width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent)),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.network_ping, color: AppTheme.accent),
+              tooltip: 'Ping tất cả',
+              onPressed: vpn.servers.isEmpty ? null : _pingAll,
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _refresh,
@@ -76,10 +100,9 @@ class _ServerListScreenState extends State<ServerListScreen> {
                         : BorderSide.none,
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     leading: Container(
-                      width: 40,
-                      height: 40,
+                      width: 40, height: 40,
                       decoration: BoxDecoration(
                         color: _protocolColor(server.protocol).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(10),
@@ -101,24 +124,17 @@ class _ServerListScreenState extends State<ServerListScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    subtitle: Text(
-                      '${server.host}:${server.port}',
-                      style: const TextStyle(color: Colors.white38, fontSize: 12),
-                    ),
                     trailing: GestureDetector(
-                      onTap: isPinging ? null : () => _ping(server),
+                      onTap: (isPinging || _pingingAll) ? null : () => _ping(server),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: _pingColor(server.ping).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: isPinging
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
+                            ? const SizedBox(width: 14, height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2))
                             : Text(
                                 server.ping == -1 ? 'Ping' : '${server.ping}ms',
                                 style: TextStyle(
@@ -143,16 +159,19 @@ class _ServerListScreenState extends State<ServerListScreen> {
   Color _pingColor(int ping) {
     if (ping == -1) return Colors.white38;
     if (ping < 100) return AppTheme.connected;
-    if (ping < 250) return Colors.orange;
+    if (ping < 300) return Colors.orange;
     return AppTheme.disconnected;
   }
 
   Color _protocolColor(String protocol) {
     return switch (protocol) {
-      'vless' => AppTheme.accent,
-      'vmess' => Colors.purple,
+      'vless'  => AppTheme.accent,
+      'vmess'  => Colors.purple,
       'trojan' => Colors.orange,
-      'ss' => Colors.green,
+      'ss'     => Colors.green,
+      'tuic'   => Colors.blue,
+      'hy2'    => Colors.pink,
+      'anytls' => Colors.teal,
       _ => Colors.white38,
     };
   }

@@ -6,6 +6,9 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/xray_config_builder.dart';
 
+// Protocols natively supported by flutter_v2ray URL parser
+const _nativeProtocols = {'vless', 'vmess', 'trojan', 'ss'};
+
 enum VpnState { disconnected, connecting, connected }
 
 class VpnProvider extends ChangeNotifier {
@@ -88,7 +91,18 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final config = XrayConfigBuilder.build(_selected!, _settings);
+      final String config;
+      if (_nativeProtocols.contains(_selected!.protocol)) {
+        // Dùng flutter_v2ray URL parser cho VLESS/VMess/Trojan/SS
+        final v2rayUrl = V2RayURL.parseURL(_selected!.rawUri);
+        config = v2rayUrl.getFullConfiguration(
+          proxyOnly: false,
+          bypassLan: _settings['domain_bypass'] ?? true,
+        );
+      } else {
+        // Dùng custom builder cho TUIC/Hysteria2/AnyTLS
+        config = XrayConfigBuilder.build(_selected!, _settings);
+      }
       await _v2ray.startV2Ray(
         remark: _selected!.name,
         config: config,
