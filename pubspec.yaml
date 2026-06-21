@@ -1,0 +1,20 @@
+name: vpnstore
+description: VPNStore - Secure VPN Client
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_v2ray: ^1.1.4
+  provider: ^6.1.2
+  dio: ^5.4.3
+  shared_preferences: ^2.2.3
+  crypto: ^3.0.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/

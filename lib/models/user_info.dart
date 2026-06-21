@@ -1,0 +1,41 @@
+class UserInfo {
+  final String email;
+  final int transferEnable;
+  final int upload;
+  final int download;
+  final int? expiredAt;
+  final String token;
+  final String? planName;
+
+  UserInfo({
+    required this.email,
+    required this.transferEnable,
+    required this.upload,
+    required this.download,
+    this.expiredAt,
+    required this.token,
+    this.planName,
+  });
+
+  factory UserInfo.fromJson(Map<String, dynamic> json) {
+    return UserInfo(
+      email: json['email'] ?? '',
+      transferEnable: json['transfer_enable'] ?? 0,
+      upload: json['u'] ?? 0,
+      download: json['d'] ?? 0,
+      expiredAt: json['expired_at'],
+      token: json['token'] ?? '',
+      planName: json['plan']?['name'],
+    );
+  }
+
+  double get usedGB => (upload + download) / 1073741824;
+  double get totalGB => transferEnable / 1073741824;
+  double get usedPercent => totalGB > 0 ? (usedGB / totalGB).clamp(0.0, 1.0) : 0;
+
+  String get expiredDate {
+    if (expiredAt == null) return 'Vĩnh viễn';
+    final dt = DateTime.fromMillisecondsSinceEpoch(expiredAt! * 1000);
+    return '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}/${dt.year}';
+  }
+}
