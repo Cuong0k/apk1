@@ -23,10 +23,8 @@ class VpnProvider extends ChangeNotifier {
   String? _error;
   bool _autoSelect = false;
   bool _userDisconnecting = false;
-  bool _checking = false;          // prevent concurrent _checkAndSwitch
   String? _savedSelectedUri;
   DateTime? _lastUpdated;
-  Timer? _pingTimer;
 
   VpnState get state => _state;
   List<Server> get servers => _servers;
@@ -55,13 +53,17 @@ class VpnProvider extends ChangeNotifier {
           'CONNECTING' => VpnState.connecting,
           _            => VpnState.disconnected,
         };
-        // Auto-reconnect on unexpected drop (not user-initiated)
+        // Khi kết nối bị drop bất ngờ (không phải user bấm ngắt):
+        // → đợi 3s → ping lại tất cả server → kết nối server tốt nhất
         if (_autoSelect &&
             prevState == VpnState.connected &&
             _state == VpnState.disconnected &&
             !_userDisconnecting) {
           Future.delayed(const Duration(seconds: 3), () {
-            if (_state == VpnState.disconnected && _autoSelect) connect();
+            if (_state == VpnState.disconnected && _autoSelect) {
+              _selected = null; // force re-ping on reconnect
+              connect();
+            }
           });
         }
         notifyListeners();
@@ -80,53 +82,7 @@ class VpnProvider extends ChangeNotifier {
       notificationIconResourceName: 'ic_launcher',
     );
     _initialized = true;
-    _startPingMonitor();
     notifyListeners();
-  }
-
-  // ── Continuous ping monitor ──────────────────────────────────────────────
-
-  void _startPingMonitor() {
-    _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(seconds: 90), (_) {
-      if (_autoSelect && _state == VpnState.connected && _servers.length > 1 && !_checking) {
-        _checkAndSwitch();
-      }
-    });
-  }
-
-  Future<void> _checkAndSwitch() async {
-    if (_checking) return;
-    _checking = true;
-    try {
-      // Ping all servers in parallel (2s timeout each)
-      final results = await Future.wait(
-        _servers.map((s) async => (server: s, ping: await _pingDirect(s))),
-      );
-
-      Server? best;
-      int bestPing = 99999;
-      for (final r in results) {
-        if (r.ping > 0 && r.ping < bestPing) {
-          bestPing = r.ping;
-          best = r.server;
-        }
-      }
-
-      final currentPing = (_selected?.ping == null || _selected!.ping <= 0)
-          ? 99999
-          : _selected!.ping;
-
-      if (best != null &&
-          best.rawUri != (_selected?.rawUri ?? '') &&
-          bestPing < currentPing - 30) {
-        _selected = best;
-        notifyListeners();
-        await _reconnect();
-      }
-    } finally {
-      _checking = false;
-    }
   }
 
   // ── Server loading ───────────────────────────────────────────────────────
@@ -157,32 +113,46 @@ class VpnProvider extends ChangeNotifier {
     _savedSelectedUri = server.rawUri;
     StorageService.saveVpnMode(autoSelect: false, selectedUri: server.rawUri);
     notifyListeners();
-    if (wasConnected) _reconnect();
+    if (wasConnected) _reconnectTo(server);
   }
 
   void setAutoSelect() {
     final wasConnected = _state == VpnState.connected;
     _autoSelect = true;
-    _selected = null;
+    _selected = null; // force re-ping
     _savedSelectedUri = null;
     StorageService.saveVpnMode(autoSelect: true, selectedUri: null);
     notifyListeners();
-    if (wasConnected) _reconnect();
+    if (wasConnected) {
+      _userDisconnecting = true;
+      _v2ray.stopV2Ray().then((_) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _userDisconnecting = false;
+          connect();
+        });
+      });
+    }
   }
 
-  Future<void> _reconnect() async {
-    await disconnect();
-    await connect();
+  // Chuyển sang server cụ thể không cần re-ping (dùng khi user chọn thủ công)
+  Future<void> _reconnectTo(Server server) async {
+    _userDisconnecting = true;
+    await _v2ray.stopV2Ray();
+    _state = VpnState.disconnected;
+    notifyListeners();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _userDisconnecting = false;
+      connect();
+    });
   }
 
   // ── VPN control ──────────────────────────────────────────────────────────
 
+  // Ping tất cả server song song, chọn server ping thấp nhất
   Future<void> _pingAndPickBest() async {
-    // Ping all servers in parallel (2s timeout each)
     final results = await Future.wait(
       _servers.map((s) async => (server: s, ping: await _pingDirect(s))),
     );
-
     Server? best;
     int bestPing = 99999;
     for (final r in results) {
@@ -209,8 +179,8 @@ class VpnProvider extends ChangeNotifier {
     if (_autoSelect && _servers.isEmpty) return;
     _error = null;
 
-    if (_autoSelect) {
-      _selected = null;
+    // Auto-select: chỉ ping khi chưa có server được chọn
+    if (_autoSelect && _selected == null) {
       _state = VpnState.connecting;
       notifyListeners();
       await _pingAndPickBest();
@@ -253,19 +223,18 @@ class VpnProvider extends ChangeNotifier {
     await _v2ray.stopV2Ray();
     _state = VpnState.disconnected;
     notifyListeners();
-    // Keep flag true for 2s — onStatusChanged may fire late via platform channel
-    Future.delayed(const Duration(seconds: 2), () => _userDisconnecting = false);
+    // Giữ flag 300ms để tránh race condition với onStatusChanged
+    Future.delayed(const Duration(milliseconds: 300), () => _userDisconnecting = false);
   }
 
   // ── Ping ─────────────────────────────────────────────────────────────────
 
-  // Direct TCP ping with 2s timeout (used for fast parallel pinging)
+  // Ping nhanh 2s dùng khi chọn server tự động (song song)
   Future<int> _pingDirect(Server server) async {
     final start = DateTime.now().millisecondsSinceEpoch;
     try {
       final socket = await Socket.connect(
-        server.host,
-        server.port,
+        server.host, server.port,
         timeout: const Duration(seconds: 2),
       );
       final delay = DateTime.now().millisecondsSinceEpoch - start;
@@ -280,13 +249,12 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
-  // Public ping (used from UI, 5s timeout for accuracy)
+  // Ping 5s dùng từ UI (bấm ping thủ công)
   Future<int> pingServer(Server server) async {
     final start = DateTime.now().millisecondsSinceEpoch;
     try {
       final socket = await Socket.connect(
-        server.host,
-        server.port,
+        server.host, server.port,
         timeout: const Duration(seconds: 5),
       );
       final delay = DateTime.now().millisecondsSinceEpoch - start;
@@ -330,11 +298,5 @@ class VpnProvider extends ChangeNotifier {
     if (bps >= 1048576)    return '${(bps / 1048576).toStringAsFixed(1)} MB/s';
     if (bps >= 1024)       return '${(bps / 1024).toStringAsFixed(0)} KB/s';
     return '${bps.toStringAsFixed(0)} B/s';
-  }
-
-  @override
-  void dispose() {
-    _pingTimer?.cancel();
-    super.dispose();
   }
 }

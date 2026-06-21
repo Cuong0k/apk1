@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Spacer(flex: 2),
 
               const Text(
-                'Beno VPN',
+                'VPN Store',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -168,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
               Text(
-                'Chỉ chấp nhận link từ dịch vụ Beno VPN',
+                'Chỉ chấp nhận link từ dịch vụ VPN Store',
                 style: TextStyle(color: context.c4, fontSize: 12),
                 textAlign: TextAlign.center,
               ),

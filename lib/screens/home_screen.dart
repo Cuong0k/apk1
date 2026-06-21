@@ -55,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Beno VPN', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('VPN Store', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: Icon(theme.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
