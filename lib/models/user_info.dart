@@ -4,7 +4,8 @@ class UserInfo {
   final int upload;
   final int download;
   final int? expiredAt;
-  final String token;
+  final String token;      // subscription token
+  final String authData;   // JWT Bearer token for API calls
   final String? planName;
 
   UserInfo({
@@ -14,18 +15,20 @@ class UserInfo {
     required this.download,
     this.expiredAt,
     required this.token,
+    required this.authData,
     this.planName,
   });
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {
     return UserInfo(
-      email: json['email'] ?? '',
-      transferEnable: json['transfer_enable'] ?? 0,
-      upload: json['u'] ?? 0,
-      download: json['d'] ?? 0,
-      expiredAt: json['expired_at'],
-      token: json['token'] ?? '',
-      planName: json['plan']?['name'],
+      email: json['email']?.toString() ?? '',
+      transferEnable: (json['transfer_enable'] as num?)?.toInt() ?? 0,
+      upload: (json['u'] as num?)?.toInt() ?? 0,
+      download: (json['d'] as num?)?.toInt() ?? 0,
+      expiredAt: (json['expired_at'] as num?)?.toInt(),
+      token: json['token']?.toString() ?? '',
+      authData: json['auth_data']?.toString() ?? json['token']?.toString() ?? '',
+      planName: json['plan']?['name']?.toString(),
     );
   }
 

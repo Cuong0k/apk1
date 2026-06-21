@@ -18,11 +18,12 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _restoreSession() async {
-    final token = await StorageService.getToken();
-    if (token != null) {
+    final authData = await StorageService.getAuthData();
+    final subToken = await StorageService.getSubToken();
+    if (authData != null && subToken != null) {
       try {
-        final data = await ApiService.getUserInfo(token);
-        _user = UserInfo.fromJson({...data, 'token': token});
+        final info = await ApiService.getUserInfo(authData);
+        _user = UserInfo.fromJson({...info, 'token': subToken, 'auth_data': authData});
       } catch (_) {
         await StorageService.clearAuth();
       }
@@ -37,12 +38,13 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final data = await ApiService.login(email, password);
-      final token = data['token'] as String;
-      await StorageService.saveAuth(token, email);
-      final info = await ApiService.getUserInfo(token);
-      _user = UserInfo.fromJson({...info, 'token': token});
+      final authData = data['auth_data'] as String? ?? data['token'] as String;
+      final subToken = data['token'] as String? ?? authData;
+      await StorageService.saveAuth(authData, subToken, email);
+      final info = await ApiService.getUserInfo(authData);
+      _user = UserInfo.fromJson({...info, 'token': subToken, 'auth_data': authData});
     } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
+      _error = e.toString().replaceAll('Exception: ', '');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -52,8 +54,8 @@ class AuthProvider extends ChangeNotifier {
   Future<void> refreshUser() async {
     if (_user == null) return;
     try {
-      final info = await ApiService.getUserInfo(_user!.token);
-      _user = UserInfo.fromJson({...info, 'token': _user!.token});
+      final info = await ApiService.getUserInfo(_user!.authData);
+      _user = UserInfo.fromJson({...info, 'token': _user!.token, 'auth_data': _user!.authData});
       notifyListeners();
     } catch (_) {}
   }

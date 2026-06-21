@@ -3,38 +3,44 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crypto/crypto.dart';
 
 class StorageService {
-  static const _keyToken = 'auth_token';
-  static const _keyEmail = 'auth_email';
+  static const _keyAuthData = 'auth_data';   // JWT Bearer token cho API
+  static const _keySubToken = 'sub_token';   // plain token cho subscription URL
+  static const _keyEmail    = 'auth_email';
   static const _keySettings = 'vpn_settings';
 
   static String _obfuscate(String value) {
     final bytes = utf8.encode(value + 'vpnstore_salt_2026');
     final hash = sha256.convert(bytes).toString().substring(0, 16);
-    final encoded = base64.encode(utf8.encode(value));
-    return '$hash.$encoded';
+    return '$hash.${base64.encode(utf8.encode(value))}';
   }
 
   static String? _deobfuscate(String stored) {
     try {
-      final parts = stored.split('.');
-      if (parts.length < 2) return null;
-      return utf8.decode(base64.decode(parts.sublist(1).join('.')));
+      final idx = stored.indexOf('.');
+      if (idx < 0) return null;
+      return utf8.decode(base64.decode(stored.substring(idx + 1)));
     } catch (_) {
       return null;
     }
   }
 
-  static Future<void> saveAuth(String token, String email) async {
+  static Future<void> saveAuth(String authData, String subToken, String email) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyToken, _obfuscate(token));
+    await prefs.setString(_keyAuthData, _obfuscate(authData));
+    await prefs.setString(_keySubToken, _obfuscate(subToken));
     await prefs.setString(_keyEmail, email);
   }
 
-  static Future<String?> getToken() async {
+  static Future<String?> getAuthData() async {
     final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_keyToken);
-    if (stored == null) return null;
-    return _deobfuscate(stored);
+    final s = prefs.getString(_keyAuthData);
+    return s != null ? _deobfuscate(s) : null;
+  }
+
+  static Future<String?> getSubToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final s = prefs.getString(_keySubToken);
+    return s != null ? _deobfuscate(s) : null;
   }
 
   static Future<String?> getEmail() async {
@@ -44,7 +50,8 @@ class StorageService {
 
   static Future<void> clearAuth() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyToken);
+    await prefs.remove(_keyAuthData);
+    await prefs.remove(_keySubToken);
     await prefs.remove(_keyEmail);
   }
 
@@ -68,7 +75,6 @@ class StorageService {
     'mtu': 1350,
     'udp_enabled': true,
     'domain_bypass': true,
-    'china_bypass': false,
     'dns_primary': '1.1.1.1',
     'dns_secondary': '8.8.8.8',
     'tcp_fast_open': false,

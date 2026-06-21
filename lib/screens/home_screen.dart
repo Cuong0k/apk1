@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final vpn = context.read<VpnProvider>();
     await auth.refreshUser();
     if (auth.user != null) {
-      await vpn.loadServers(auth.user!.token);
+      await vpn.loadServers(auth.user!.token, authData: auth.user!.authData);
     }
   }
 

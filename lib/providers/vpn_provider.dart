@@ -52,9 +52,9 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadServers(String token) async {
+  Future<void> loadServers(String subToken, {String? authData}) async {
     try {
-      final sub = await ApiService.getSubscription(token);
+      final sub = await ApiService.getSubscription(subToken, authData: authData);
       _servers = Server.parseSubscription(sub);
       if (_servers.isNotEmpty && _selected == null) {
         _selected = _servers.first;

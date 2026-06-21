@@ -51,11 +51,13 @@ class ApiService {
     }
   }
 
-  static Future<String> getSubscription(String token) async {
+  // subToken: plain token dùng làm query param (?token=xxx)
+  // authData: JWT Bearer token dùng trong header
+  static Future<String> getSubscription(String subToken, {String? authData}) async {
     try {
-      final res = await _dio(token: token).get(
+      final res = await _dio(token: authData).get(
         '/api/v1/client/subscribe',
-        queryParameters: {'flag': 'v2rayn'},
+        queryParameters: {'token': subToken, 'flag': 'v2rayn'},
       );
       return res.data.toString();
     } on DioException catch (e) {
