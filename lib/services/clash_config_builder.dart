@@ -40,10 +40,6 @@ class ClashConfigBuilder {
     buf.writeln('  nameserver:');
     buf.writeln('    - $dns1');
     buf.writeln('    - $dns2');
-    if (routingMode == 'rules') {
-      buf.writeln('  nameserver-policy:');
-      buf.writeln('    "geosite:geolocation-cn": [$dns1, $dns2]');
-    }
     buf.writeln('');
 
     // ── Proxies ───────────────────────────────────────────────────────────
@@ -98,13 +94,21 @@ class ClashConfigBuilder {
     } else if (routingMode == 'global') {
       buf.writeln('  - MATCH,PROXY');
     } else {
-      // rules mode: social media → proxy first, then VN bypass
+      // rules mode: social media → proxy, private networks + VN CIDRs → direct
+      // Avoid GEOIP/GEOSITE rules — they require geoip.dat/geosite.dat database
+      // files that are not bundled with the app and would crash Clash on startup.
       for (final d in _socialDomains) {
         buf.writeln('  - DOMAIN-SUFFIX,$d,PROXY');
       }
-      buf.writeln('  - GEOIP,VN,DIRECT,no-resolve');
-      buf.writeln('  - GEOSITE,VN,DIRECT');
-      buf.writeln('  - GEOIP,private,DIRECT,no-resolve');
+      // Private & LAN networks
+      buf.writeln('  - IP-CIDR,192.168.0.0/16,DIRECT');
+      buf.writeln('  - IP-CIDR,10.0.0.0/8,DIRECT');
+      buf.writeln('  - IP-CIDR,172.16.0.0/12,DIRECT');
+      buf.writeln('  - IP-CIDR,127.0.0.0/8,DIRECT');
+      // Common Vietnamese ISP CIDRs (no geo database needed)
+      for (final cidr in _vnCidrs) {
+        buf.writeln('  - IP-CIDR,$cidr,DIRECT');
+      }
       buf.writeln('  - MATCH,PROXY');
     }
 
@@ -297,5 +301,20 @@ class ClashConfigBuilder {
     'tiktok.com', 'tiktokcdn.com', 'tiktokv.com', 'ttwstatic.com', 'musical.ly',
     'twitter.com', 'twimg.com', 'x.com',
     'telegram.org', 't.me',
+  ];
+
+  // Major Vietnamese ISP IP ranges — replaces GEOIP,VN rule to avoid needing geoip.dat
+  static const _vnCidrs = [
+    // Viettel
+    '14.160.0.0/11', '14.224.0.0/11', '27.64.0.0/11', '42.112.0.0/13',
+    '58.186.0.0/15', '113.160.0.0/11', '116.96.0.0/11', '123.16.0.0/13',
+    '125.232.0.0/13', '171.224.0.0/12', '203.210.128.0/19',
+    // VNPT
+    '113.172.0.0/14', '118.68.0.0/14', '118.70.0.0/15', '123.24.0.0/14',
+    '125.212.0.0/15', '203.162.0.0/19',
+    // FPT Telecom
+    '27.72.0.0/13', '103.7.56.0/22', '117.0.0.0/11',
+    // CMC / other VN
+    '103.1.208.0/21', '103.9.76.0/22',
   ];
 }
