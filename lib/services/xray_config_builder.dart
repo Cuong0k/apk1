@@ -36,8 +36,19 @@ class XrayConfigBuilder {
 
     return {
       'log': {'loglevel': logLevel == 'none' ? 'none' : logLevel},
+      // FakeDNS: trả fake IP ngay lập tức (không cần round-trip DNS qua tunnel)
+      // Tương đương fake-ip mode của Clash Meta — loại bỏ độ trễ DNS khi thiết lập kết nối
+      'fakedns': [
+        {'ipPool': '198.18.0.0/15', 'poolSize': 65535},
+      ],
       'dns': {
-        'servers': [dns1, dns2, 'localhost'],
+        'servers': [
+          'fakedns',           // Ưu tiên fake DNS — phản hồi tức thì
+          'https+local://cloudflare-dns.com/dns-query', // DoH fallback (giải ngoài tunnel)
+          dns1,
+          dns2,
+          'localhost',
+        ],
         'queryStrategy': ipv6 ? 'UseIP' : 'UseIPv4',
       },
       'inbounds': [
@@ -49,7 +60,8 @@ class XrayConfigBuilder {
           'settings': {'auth': 'noauth', 'udp': udp, 'userLevel': 8},
           'sniffing': {
             'enabled': sniffing,
-            'destOverride': ['http', 'tls', 'quic'],
+            'destOverride': ['http', 'tls', 'quic', 'fakedns'],
+            'metadataOnly': false, // Cần đọc payload để nhận diện FakeDNS
           },
         },
         {
