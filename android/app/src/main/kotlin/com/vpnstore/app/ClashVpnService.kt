@@ -60,7 +60,15 @@ class ClashVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        // Android may restart a foreground service after a crash with a null intent.
+        // In that case, do nothing — let the Flutter app detect the disconnected state
+        // and reconnect explicitly rather than auto-restarting potentially broken state.
+        if (intent == null) {
+            writeStateFile(running = false)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        when (intent.action) {
             ACTION_START -> {
                 val config  = intent.getStringExtra(EXTRA_CONFIG)  ?: return START_NOT_STICKY
                 val homeDir = intent.getStringExtra(EXTRA_HOME_DIR) ?: filesDir.absolutePath
@@ -235,13 +243,10 @@ class ClashVpnService : VpnService() {
         totalUp: Long = 0, totalDown: Long = 0,
     ) {
         try {
-            if (running) {
-                stateFile().writeText(
-                    """{"running":true,"up":$up,"down":$down,"totalUp":$totalUp,"totalDown":$totalDown}"""
-                )
-            } else {
-                stateFile().writeText("""{"running":false,"up":0,"down":0,"totalUp":0,"totalDown":0}""")
-            }
+            val ts = System.currentTimeMillis()
+            stateFile().writeText(
+                """{"running":$running,"up":$up,"down":$down,"totalUp":$totalUp,"totalDown":$totalDown,"ts":$ts}"""
+            )
         } catch (_: Throwable) {}
     }
 

@@ -124,15 +124,19 @@ class MainActivity : FlutterActivity() {
         return try {
             val text = File(filesDir, "vpn_state.json").readText()
             val j = JSONObject(text)
+            val running = j.optBoolean("running", false)
+            // If the service process crashed, the file won't be updated.
+            // Treat state as "not running" if the heartbeat timestamp is stale (> 5s old).
+            val ts = j.optLong("ts", 0L)
+            val fresh = (System.currentTimeMillis() - ts) < 5000L
             VpnState(
-                running   = j.optBoolean("running", false),
+                running   = running && fresh,
                 up        = j.optLong("up",        0),
                 down      = j.optLong("down",      0),
                 totalUp   = j.optLong("totalUp",   0),
                 totalDown = j.optLong("totalDown", 0),
             )
         } catch (_: Throwable) {
-            // File doesn't exist or is malformed — service is not running
             VpnState()
         }
     }
