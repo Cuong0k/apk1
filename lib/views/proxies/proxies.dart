@@ -93,12 +93,11 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
   }
 
   void _handleShowAddProfile() {
-    final ctx = globalState.navigatorKey.currentState?.context ?? context;
     showExtend(
-      ctx,
+      context,
       builder: (_) {
         return AdaptiveSheetScaffold(
-          body: AddProfileView(context: ctx),
+          body: AddProfileView(context: context),
           title: context.appLocalizations.addProfile,
         );
       },
