@@ -1,0 +1,50 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28c
+          add-to-path: true
+          link-to-sdk: true
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.9
+          cache: true
+
+      - name: Download pre-built libclash.so
+        run: |
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          curl -L -o android/app/src/main/jniLibs/arm64-v8a/libclash.so \
+            https://github.com/Cuong0k/apk1/releases/download/native-libs-v1/libclash.so
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpnstore-meta-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          overwrite: true

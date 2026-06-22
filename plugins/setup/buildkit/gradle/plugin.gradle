@@ -1,0 +1,46 @@
+// plugin.gradle — Build Go core as part of the Android Gradle build
+//
+// Apply this from the setup plugin's android/build.gradle:
+//   apply from: "${project.projectDir}/../buildkit/gradle/plugin.gradle"
+//
+// It adds a task that runs build_tool android before mergeNativeLibs.
+
+def buildkitDir = file("${project.projectDir}/../buildkit").absolutePath
+def launcher = "${buildkitDir}/run_build_tool.sh"
+def projectRoot = file("${buildkitDir}/../../..").absolutePath
+def androidArch = System.getenv('ANDROID_ARCH')
+def targetPlatform = project.findProperty('target-platform') ?:
+        rootProject.findProperty('target-platform')
+def androidNdk = System.getenv('ANDROID_NDK')
+def archArgs = androidArch
+        ? ['--arch', androidArch]
+        : (targetPlatform ? ['--target-platform', targetPlatform.toString()] : [])
+
+// Skip Go compilation if pre-built libclash.so is already placed in jniLibs.
+// CI can download a pre-built binary and place it there to avoid the ~15min Go compile.
+def prebuiltSo = file("${projectRoot}/android/app/src/main/jniLibs/arm64-v8a/libclash.so")
+
+task buildGoCore(type: Exec) {
+    enabled = !prebuiltSo.exists()
+    workingDir buildkitDir
+    commandLine 'bash', launcher, 'android', *archArgs
+
+    environment 'ANDROID_NDK', androidNdk
+    environment 'APP_ENV', project.hasProperty('appEnv') ? project.appEnv : 'pre'
+    environment 'PROJECT_DIR', projectRoot
+}
+
+def goCoreTask = buildGoCore
+
+// Wire into the Android build across all subprojects
+afterEvaluate {
+    rootProject.subprojects { sub ->
+        sub.tasks.matching {
+            it.name.startsWith('configureCMake') ||
+                    it.name.startsWith('externalNativeBuild') ||
+                    it.name.startsWith('mergeNativeLibs')
+        }.configureEach {
+            dependsOn goCoreTask
+        }
+    }
+}
