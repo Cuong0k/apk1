@@ -135,9 +135,17 @@ class ClashVpnService : VpnService() {
     }
 
     private fun startClash(homeDir: String, yamlConfig: String): Boolean {
+        // Clear log at start of each attempt so log always reflects latest attempt
+        try { logFile().delete() } catch (_: Throwable) {}
+        writeLog("startClash: begin")
+
         isRunning = false
         trafficHandler?.removeCallbacks(trafficRunnable)
+
+        writeLog("stopTun: about to call (loads native libs)")
         try { Core.stopTun() } catch (_: Throwable) {}
+        writeLog("stopTun: done (libs loaded OK)")
+
         tunFd?.close()
         tunFd = null
 
@@ -149,6 +157,7 @@ class ClashVpnService : VpnService() {
             return false
         }
 
+        writeLog("TUN: about to establish")
         val tun = try {
             Builder().apply {
                 setMtu(1500)
@@ -161,13 +170,14 @@ class ClashVpnService : VpnService() {
                 try { addDisallowedApplication(packageName) } catch (_: Throwable) {}
             }.establish()
         } catch (e: Throwable) {
-            android.util.Log.e("ClashVPN", "TUN establish failed: ${e.message}")
+            writeLog("TUN: establish failed: ${e.message}")
             null
-        } ?: return false
+        } ?: run { writeLog("TUN: establish returned null"); return false }
 
+        writeLog("TUN: established fd=${tun.fd}")
         tunFd = tun
 
-        writeLog("calling quickSetup homeDir=$homeDir")
+        writeLog("quickSetup: calling homeDir=$homeDir")
         try {
             val result = Core.quickSetup(homeDir)
             if (result.isNotEmpty() && result != "success") {

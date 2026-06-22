@@ -106,8 +106,9 @@ class VpnProvider extends ChangeNotifier {
         _lastConnectTime ??= DateTime.now();
         _reconnectAttempts = 0;
       } else if (_state != VpnState.disconnected) {
-        // Unexpected disconnect
+        // Unexpected disconnect — read the native log to show a useful error
         _state = VpnState.disconnected;
+        _readNativeLog();
         if (_autoSelect && !_userDisconnecting) {
           _scheduleReconnect();
         }
@@ -329,17 +330,17 @@ class VpnProvider extends ChangeNotifier {
       _connecting = false;
     }
 
-    // If still disconnected after the attempt, read the native log for diagnostics
-    if (_state == VpnState.disconnected && _error == null) {
-      try {
-        final log = await _clashChannel.invokeMethod<String>('getVpnLog') ?? '';
-        if (log.isNotEmpty) {
-          final lines = log.trim().split('\n');
-          _error = lines.last; // show most recent log line as error
-          notifyListeners();
-        }
-      } catch (_) {}
-    }
+  }
+
+  Future<void> _readNativeLog() async {
+    try {
+      final log = await _clashChannel.invokeMethod<String>('getVpnLog') ?? '';
+      if (log.isNotEmpty) {
+        final lines = log.trim().split('\n');
+        _error = lines.last;
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   Future<void> disconnect() async {
