@@ -4,7 +4,7 @@ import 'package:fl_clash/models/common.dart';
 import 'package:fl_clash/models/state.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
-import 'package:fl_clash/views/dashboard/widgets/network_detection.dart';
+import 'package:fl_clash/views/dashboard/widgets/network_detection.dart' as nd;
 import 'package:fl_clash/views/dashboard/widgets/traffic_usage.dart';
 import 'package:fl_clash/views/profiles/add.dart';
 import 'package:fl_clash/views/proxies/list.dart';
@@ -343,7 +343,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
           child: const Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: NetworkDetection()),
+              Expanded(child: nd.NetworkDetection()),
               SizedBox(width: 8),
               Expanded(child: TrafficUsage()),
             ],
