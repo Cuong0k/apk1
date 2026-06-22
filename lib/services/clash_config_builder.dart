@@ -34,17 +34,13 @@ class ClashConfigBuilder {
     buf.writeln('');
 
     // ── DNS ───────────────────────────────────────────────────────────────
+    // Use enhanced-mode: normal (not fake-ip) to avoid Clash panicking when
+    // initializing the fake-ip DNS store — fake-ip requires a writable cache
+    // directory and specific CIDR setup that can cause Go runtime panics on
+    // certain device configurations.
     buf.writeln('dns:');
     buf.writeln('  enable: true');
-    if (routingMode != 'direct') {
-      buf.writeln('  enhanced-mode: fake-ip');
-      buf.writeln('  fake-ip-range: 198.18.0.1/16');
-      buf.writeln('  fake-ip-filter:');
-      buf.writeln('    - "*.lan"');
-      buf.writeln('    - localhost.ptlogin2.qq.com');
-    } else {
-      buf.writeln('  enhanced-mode: normal');
-    }
+    buf.writeln('  enhanced-mode: normal');
     buf.writeln('  nameserver:');
     buf.writeln('    - $dns1');
     buf.writeln('    - $dns2');

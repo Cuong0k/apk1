@@ -107,6 +107,13 @@ class MainActivity : FlutterActivity() {
 
                     "getFilesDir" -> result.success(filesDir.absolutePath)
 
+                    "getVpnLog" -> {
+                        val log = try {
+                            File(filesDir, "vpn_log.txt").readText()
+                        } catch (_: Throwable) { "" }
+                        result.success(log)
+                    }
+
                     else -> result.notImplemented()
                 }
             }

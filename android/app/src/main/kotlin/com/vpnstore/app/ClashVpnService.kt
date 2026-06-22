@@ -145,7 +145,7 @@ class ClashVpnService : VpnService() {
         try {
             File(dir, "config.yaml").writeText(yamlConfig)
         } catch (e: Throwable) {
-            android.util.Log.e("ClashVPN", "write config failed: ${e.message}")
+            writeLog("write config failed: ${e.message}")
             return false
         }
 
@@ -167,16 +167,18 @@ class ClashVpnService : VpnService() {
 
         tunFd = tun
 
+        writeLog("calling quickSetup homeDir=$homeDir")
         try {
             val result = Core.quickSetup(homeDir)
             if (result.isNotEmpty() && result != "success") {
-                android.util.Log.e("ClashVPN", "quickSetup failed: $result")
+                writeLog("quickSetup returned error: $result")
                 tun.close()
                 tunFd = null
                 return false
             }
+            writeLog("quickSetup OK result='$result'")
         } catch (e: Throwable) {
-            android.util.Log.e("ClashVPN", "quickSetup exception: ${e.message}")
+            writeLog("quickSetup threw: ${e.javaClass.simpleName}: ${e.message}")
             tun.close()
             tunFd = null
             return false
@@ -186,14 +188,17 @@ class ClashVpnService : VpnService() {
         // has fully initialized all internal state before we hand over the TUN fd.
         // Without this wait, startTUN can race with goroutines started by quickSetup
         // and cause nil-pointer panics inside the Go runtime.
-        waitForClashReady(maxMs = 5000)
+        val ready = waitForClashReady(maxMs = 5000)
+        writeLog("waitForClashReady=$ready")
 
         protect(tun.fd)
 
+        writeLog("calling startTun fd=${tun.fd}")
         try {
             Core.startTun(tun.fd, tunBridge)
+            writeLog("startTun OK")
         } catch (e: Throwable) {
-            android.util.Log.e("ClashVPN", "startTun failed: ${e.message}")
+            writeLog("startTun threw: ${e.javaClass.simpleName}: ${e.message}")
             tun.close()
             tunFd = null
             try { Core.stopTun() } catch (_: Throwable) {}
@@ -207,7 +212,7 @@ class ClashVpnService : VpnService() {
     }
 
     /** Poll 127.0.0.1:9091/version until Clash's REST API responds (= fully started). */
-    private fun waitForClashReady(maxMs: Long) {
+    private fun waitForClashReady(maxMs: Long): Boolean {
         val deadline = System.currentTimeMillis() + maxMs
         while (System.currentTimeMillis() < deadline) {
             try {
@@ -216,11 +221,27 @@ class ClashVpnService : VpnService() {
                 conn.readTimeout    = 400
                 val code = conn.responseCode
                 conn.disconnect()
-                if (code in 200..299) return  // Clash is ready
+                if (code in 200..299) return true  // Clash is ready
             } catch (_: Throwable) {}
-            try { Thread.sleep(200) } catch (_: InterruptedException) { return }
+            try { Thread.sleep(200) } catch (_: InterruptedException) { return false }
         }
-        android.util.Log.w("ClashVPN", "Clash REST API not ready after ${maxMs}ms — proceeding anyway")
+        return false
+    }
+
+    // ── Diagnostic log file — survives process death, readable by MainActivity ──
+
+    private fun logFile() = File(filesDir, "vpn_log.txt")
+
+    internal fun writeLog(msg: String) {
+        android.util.Log.d("ClashVPN", msg)
+        try {
+            val line = "${System.currentTimeMillis()} $msg\n"
+            val f = logFile()
+            // Keep last 4 KB to avoid unbounded growth
+            val existing = if (f.exists()) f.readText() else ""
+            val trimmed = if (existing.length > 3800) existing.takeLast(3800) else existing
+            f.writeText(trimmed + line)
+        } catch (_: Throwable) {}
     }
 
     private fun stopClash() {

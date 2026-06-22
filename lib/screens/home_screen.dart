@@ -244,6 +244,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ],
+                  if (vpn.error != null && vpn.state == VpnState.disconnected) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      vpn.error!,
+                      style: const TextStyle(color: AppTheme.disconnected, fontSize: 11),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
               ),
             ),
