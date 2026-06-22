@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,13 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Catch unhandled Dart errors so they don't crash the app
+  PlatformDispatcher.instance.onError = (error, stack) {
+    return true; // return true = error handled, don't crash
+  };
+  FlutterError.onError = (details) {
+    // In release mode this is a no-op; keeps app alive on non-fatal Flutter errors
+  };
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(
     MultiProvider(

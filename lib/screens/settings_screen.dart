@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/vpn_provider.dart';
 import '../theme/app_theme.dart';
@@ -72,6 +72,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Bỏ qua mạng LAN', sub: 'Truy cập nội bộ không qua VPN',
                   value: _s['domain_bypass'] ?? true,
                   onChange: (v) => setState(() => _s['domain_bypass'] = v)),
+                _Div(),
+                _Switch(icon: Icons.notifications_off_outlined,
+                  title: 'Im lặng khi tự chọn máy chủ',
+                  sub: 'Ẩn tên máy chủ trên thông báo VPN',
+                  value: _s['silent_auto_select'] ?? false,
+                  onChange: (v) => setState(() => _s['silent_auto_select'] = v)),
               ],
             ),
           ),
@@ -82,13 +88,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: _Dropdown(
               icon: Icons.alt_route_outlined,
               title: 'Chế độ định tuyến',
-              sub: (_s['routing_mode'] ?? 'global') == 'global'
-                  ? 'Tất cả lưu lượng qua VPN'
-                  : 'Bỏ qua VN/LAN, proxy phần còn lại',
+              sub: switch (_s['routing_mode'] ?? 'global') {
+                'rules'  => 'Bỏ qua VN/LAN, proxy phần còn lại',
+                'direct' => 'Kết nối trực tiếp, không qua VPN',
+                _        => 'Tất cả lưu lượng qua VPN',
+              },
               value: _s['routing_mode'] ?? 'global',
               options: const [
                 _Opt('global', 'Toàn cầu'),
                 _Opt('rules', 'Quy tắc (Bypass VN)'),
+                _Opt('direct', 'Trực tiếp'),
               ],
               onChange: (v) => setState(() => _s['routing_mode'] = v),
             ),
@@ -168,7 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Div(),
                 _Dropdown(
                   icon: Icons.terminal_outlined,
-                  title: 'Mức nhật ký', sub: 'Mức độ chi tiết của log xray',
+                  title: 'Mức nhật ký', sub: 'Mức độ chi tiết của Clash log',
                   value: _s['log_level'] ?? 'error',
                   options: const [
                     _Opt('none', 'Tắt'),

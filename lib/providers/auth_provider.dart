@@ -18,10 +18,12 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _restoreSession() async {
-    final subToken = await StorageService.getSubToken();
-    if (subToken != null) {
-      await _loadUser(subToken, save: false);
-    }
+    try {
+      final subToken = await StorageService.getSubToken();
+      if (subToken != null) {
+        await _loadUser(subToken, save: false);
+      }
+    } catch (_) {}
     _isLoading = false;
     notifyListeners();
   }

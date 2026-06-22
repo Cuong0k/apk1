@@ -1,4 +1,6 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/vpn_provider.dart';
@@ -15,8 +17,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const _apkUrl = 'https://client-user.jiangsuhk.com/app/update/vpnstore.apk';
+  static const _updateChannel = MethodChannel('com.vpnstore.app/update');
+
   int _tab = 0;
   bool _updating = false;
+  bool _downloadingApp = false;
+  double? _downloadProgress;
+  String? _downloadError;
 
   @override
   void initState() {
@@ -30,6 +38,26 @@ class _HomeScreenState extends State<HomeScreen> {
     await auth.refreshUser();
     if (auth.user != null) {
       await vpn.loadServers(auth.user!.token, authData: auth.user!.authData);
+    }
+  }
+
+  Future<void> _downloadAndInstall() async {
+    setState(() { _downloadingApp = true; _downloadProgress = 0; _downloadError = null; });
+    try {
+      final cacheDir = await _updateChannel.invokeMethod<String>('getCacheDir');
+      final savePath = '$cacheDir/vpnstore_update.apk';
+      await Dio().download(
+        _apkUrl,
+        savePath,
+        onReceiveProgress: (received, total) {
+          if (total > 0 && mounted) setState(() => _downloadProgress = received / total);
+        },
+      );
+      if (mounted) await _updateChannel.invokeMethod('installApk', {'path': savePath});
+    } catch (e) {
+      if (mounted) setState(() => _downloadError = 'Lỗi: $e');
+    } finally {
+      if (mounted) setState(() { _downloadingApp = false; _downloadProgress = null; });
     }
   }
 
@@ -49,8 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final vpn = context.watch<VpnProvider>();
+    final auth  = context.watch<AuthProvider>();
+    final vpn   = context.watch<VpnProvider>();
     final theme = context.watch<ThemeProvider>();
 
     return Scaffold(
@@ -60,13 +88,6 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: Icon(theme.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
             onPressed: () => context.read<ThemeProvider>().toggle(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -80,8 +101,8 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _tab,
         children: [
-          _buildDashboard(vpn),
-          _buildTools(auth),
+          _buildDashboard(auth, vpn),
+          _buildTools(auth, vpn, theme),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -105,9 +126,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ─── Tab 0: Dashboard ─────────────────────────────────────────────────────
 
-  Widget _buildDashboard(VpnProvider vpn) {
-    final auth = context.watch<AuthProvider>();
-    final user = auth.user;
+  Widget _buildDashboard(AuthProvider auth, VpnProvider vpn) {
+    final user       = auth.user;
     final stateColor = vpn.isConnected ? AppTheme.connected : AppTheme.disconnected;
     final stateLabel = switch (vpn.state) {
       VpnState.connected    => 'Đã kết nối',
@@ -122,7 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // ── Data info card ──
+            // ── Data usage card ──
             if (user != null)
               Card(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -141,10 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           const Spacer(),
                           Icon(Icons.calendar_today_outlined, size: 14, color: context.c3),
                           const SizedBox(width: 4),
-                          Text(
-                            user.expiredDate,
-                            style: TextStyle(color: context.c2, fontSize: 13),
-                          ),
+                          Text(user.expiredDate, style: TextStyle(color: context.c2, fontSize: 13)),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -162,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // ── Warning expired/inactive ──
+            // ── Warning ──
             if (user != null && !user.isActive)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -186,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // ── VPN Toggle ──
+            // ── VPN button ──
             Container(
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
@@ -202,8 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         : vpn.toggleVpn,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      width: 120,
-                      height: 120,
+                      width: 120, height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: stateColor.withOpacity(0.15),
@@ -215,10 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    stateLabel,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: stateColor),
-                  ),
+                  Text(stateLabel, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: stateColor)),
                   if (vpn.isConnected && vpn.totalSpeedStr.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Row(
@@ -226,14 +239,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Icon(Icons.speed_rounded, size: 16, color: context.c2),
                         const SizedBox(width: 6),
-                        Text(
-                          vpn.totalSpeedStr,
-                          style: TextStyle(
-                            color: context.c1,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        Text(vpn.totalSpeedStr,
+                            style: TextStyle(color: context.c1, fontSize: 16, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ],
@@ -243,7 +250,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 16),
 
-            // ── Server selector + Update ──
+            // ── Routing mode: Quy tắc / Toàn cầu / Trực tiếp ──
+            _RoutingBar(vpn: vpn),
+
+            const SizedBox(height: 8),
+
+            // ── Server selector + refresh ──
             Card(
               child: Column(
                 children: [
@@ -251,12 +263,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                     onTap: () {
                       if (user != null && !user.isActive) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Tài khoản chưa kích hoạt hoặc đã hết hạn'),
-                            backgroundColor: AppTheme.disconnected,
-                          ),
-                        );
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Tài khoản chưa kích hoạt hoặc đã hết hạn'),
+                          backgroundColor: AppTheme.disconnected,
+                        ));
                         return;
                       }
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const ServerListScreen()));
@@ -285,9 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-
                   Divider(height: 1, color: context.c4),
-
                   InkWell(
                     borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
                     onTap: _updating ? null : _onUpdate,
@@ -296,10 +304,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         children: [
                           _updating
-                              ? const SizedBox(
-                                  width: 20, height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent),
-                                )
+                              ? const SizedBox(width: 20, height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent))
                               : const Icon(Icons.sync, color: AppTheme.accent, size: 20),
                           const SizedBox(width: 12),
                           Text('Cập nhật VPN', style: TextStyle(color: context.c1, fontSize: 14)),
@@ -321,40 +327,76 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ─── Tab 1: Tools ─────────────────────────────────────────────────────────
 
-  Widget _buildTools(AuthProvider auth) {
+  Widget _buildTools(AuthProvider auth, VpnProvider vpn, ThemeProvider theme) {
     final user = auth.user;
-    if (user == null) return const Center(child: CircularProgressIndicator());
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionLabel('Thông tin tài khoản'),
-          Card(
-            child: Column(
-              children: [
-                if (user.id != null)
-                  _InfoRow(label: 'ID', value: '#${user.id}', icon: Icons.badge_outlined),
-                if (user.id != null)
-                  Divider(height: 1, color: context.c4),
-                _InfoRow(
-                  label: 'Gói dịch vụ',
-                  value: user.planName ?? 'Chưa kích hoạt',
-                  icon: Icons.card_membership_outlined,
-                  valueColor: user.planName != null ? AppTheme.accent : context.c3,
-                ),
-                Divider(height: 1, color: context.c4),
-                _InfoRow(
-                  label: 'Hết hạn',
-                  value: user.expiredDate,
-                  icon: Icons.calendar_today_outlined,
-                ),
-              ],
-            ),
+    return ListView(
+      children: [
+        // ── Thêm ──
+        const _ToolSectionHeader('Thêm'),
+        _ToolTile(
+          icon: Icons.network_check_outlined,
+          title: 'Kiểm tra độ trễ',
+          subtitle: 'Ping và so sánh tất cả máy chủ',
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ServerListScreen())),
+        ),
+        Divider(height: 1, indent: 56, color: context.c4),
+        _ToolTile(
+          icon: Icons.system_update_alt_outlined,
+          title: 'Cập nhật ứng dụng',
+          subtitle: _downloadingApp && _downloadProgress != null
+              ? 'Đang tải... ${(_downloadProgress! * 100).toStringAsFixed(0)}%'
+              : 'Tải phiên bản mới nhất',
+          trailing: _downloadingApp
+              ? const SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent))
+              : null,
+          onTap: _downloadingApp ? null : _downloadAndInstall,
+        ),
+        if (_downloadError != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(56, 0, 16, 8),
+            child: Text(_downloadError!, style: const TextStyle(color: AppTheme.disconnected, fontSize: 12)),
+          ),
+
+        // ── Cài đặt ──
+        const _ToolSectionHeader('Cài đặt'),
+        _ToolTile(
+          icon: Icons.palette_outlined,
+          title: 'Giao diện',
+          subtitle: theme.isDark ? 'Đặt chế độ tối' : 'Đặt chế độ sáng',
+          onTap: () => context.read<ThemeProvider>().toggle(),
+        ),
+        Divider(height: 1, indent: 56, color: context.c4),
+        _ToolTile(
+          icon: Icons.tune_outlined,
+          title: 'Cấu hình nâng cao',
+          subtitle: 'DNS, TCP, sniffing, log...',
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+        ),
+
+        // ── Tài khoản ──
+        if (user != null) ...[
+          const _ToolSectionHeader('Tài khoản'),
+          if (user.id != null) ...[
+            _ToolTile(icon: Icons.badge_outlined, title: 'ID', subtitle: '#${user.id}'),
+            Divider(height: 1, indent: 56, color: context.c4),
+          ],
+          _ToolTile(
+            icon: Icons.card_membership_outlined,
+            title: 'Gói dịch vụ',
+            subtitle: user.planName ?? 'Chưa kích hoạt',
+          ),
+          Divider(height: 1, indent: 56, color: context.c4),
+          _ToolTile(
+            icon: Icons.calendar_today_outlined,
+            title: 'Hết hạn',
+            subtitle: user.expiredDate,
           ),
         ],
-      ),
+
+        const SizedBox(height: 32),
+      ],
     );
   }
 
@@ -367,54 +409,107 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ─── Shared widgets ──────────────────────────────────────────────────────────
+// ─── Routing mode bar ─────────────────────────────────────────────────────────
 
-class _SectionLabel extends StatelessWidget {
+class _RoutingBar extends StatelessWidget {
+  final VpnProvider vpn;
+  const _RoutingBar({required this.vpn});
+
+  static const _modes = [
+    ('rules',  'Quy tắc',   Icons.alt_route_outlined),
+    ('global', 'Toàn cầu',  Icons.public_outlined),
+    ('direct', 'Trực tiếp', Icons.sync_disabled_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final current = vpn.routingMode;
+    return Row(
+      children: _modes.map((m) {
+        final isActive = current == m.$1;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => vpn.setRoutingMode(m.$1),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: isActive ? AppTheme.accent.withOpacity(0.12) : context.cardBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isActive ? AppTheme.accent : context.c4,
+                  width: isActive ? 1.5 : 1,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(m.$3, color: isActive ? AppTheme.accent : context.c3, size: 18),
+                  const SizedBox(height: 4),
+                  Text(
+                    m.$2,
+                    style: TextStyle(
+                      color: isActive ? AppTheme.accent : context.c2,
+                      fontSize: 12,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─── Tools helper widgets ─────────────────────────────────────────────────────
+
+class _ToolSectionHeader extends StatelessWidget {
   final String text;
-  const _SectionLabel(this.text);
+  const _ToolSectionHeader(this.text);
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
+    padding: const EdgeInsets.fromLTRB(16, 24, 16, 4),
     child: Text(
       text,
-      style: const TextStyle(color: AppTheme.accent, fontSize: 13, fontWeight: FontWeight.w600),
+      style: TextStyle(
+        color: context.c3,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
+      ),
     ),
   );
 }
 
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData? icon;
-  final Color? valueColor;
+class _ToolTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+  final Widget? trailing;
 
-  const _InfoRow({required this.label, required this.value, this.icon, this.valueColor});
+  const _ToolTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+    this.trailing,
+  });
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    child: Row(
-      children: [
-        if (icon != null) ...[
-          Icon(icon!, color: context.iconColor, size: 18),
-          const SizedBox(width: 10),
-        ],
-        Text(label, style: TextStyle(color: context.c2, fontSize: 13)),
-        const Spacer(),
-        Flexible(
-          child: Text(
-            value,
-            style: TextStyle(
-              color: valueColor ?? context.c1,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.end,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    ),
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+    leading: Icon(icon, color: context.iconColor, size: 22),
+    title: Text(title, style: TextStyle(color: context.c1, fontSize: 14)),
+    subtitle: Text(subtitle, style: TextStyle(color: context.c3, fontSize: 12)),
+    trailing: trailing ?? (onTap != null
+        ? Icon(Icons.chevron_right, color: context.c4, size: 20)
+        : null),
+    onTap: onTap,
   );
 }

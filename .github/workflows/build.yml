@@ -12,6 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download Clash Meta native libs
+        run: |
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          curl -L "https://github.com/Cuong0k/apk1/releases/download/native-libs-v1/libclash.so" \
+               -o android/app/src/main/jniLibs/arm64-v8a/libclash.so
+          echo "libclash.so: $(du -sh android/app/src/main/jniLibs/arm64-v8a/libclash.so)"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

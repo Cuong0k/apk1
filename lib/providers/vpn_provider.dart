@@ -1,76 +1,61 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:flutter/services.dart';
 import '../models/server.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
-import '../services/xray_config_builder.dart';
+import '../services/clash_config_builder.dart';
+import '../services/clash_api.dart';
 
-const _nativeProtocols = {'vless', 'vmess', 'trojan', 'ss'};
+const _vpnChannel   = MethodChannel('com.vpnstore.app/vpn');
+const _clashChannel = MethodChannel('com.vpnstore.app/clash');
 
 enum VpnState { disconnected, connecting, connected }
 
 class VpnProvider extends ChangeNotifier {
-  late final FlutterV2ray _v2ray;
-
   VpnState _state = VpnState.disconnected;
   List<Server> _servers = [];
-  Server? _selected;
-  V2RayStatus? _status;
+  Server? _selected;       // currently active server (null = auto)
   bool _initialized = false;
   Map<String, dynamic> _settings = {};
   String? _error;
   bool _autoSelect = false;
   bool _userDisconnecting = false;
-  bool _checking = false;
+  bool _connecting = false;
   String? _savedSelectedUri;
   DateTime? _lastUpdated;
-  Timer? _pingTimer;
+  DateTime? _lastConnectTime;
+  int _reconnectAttempts = 0;
 
-  VpnState get state => _state;
+  // Traffic from Clash engine (bytes/s)
+  int _uploadSpeed   = 0;
+  int _downloadSpeed = 0;
+
+  Timer? _statusTimer;  // polls isRunning every 2s
+  Timer? _trafficTimer; // polls traffic every 1s
+
+  // ── Public API ───────────────────────────────────────────────────────────
+
+  VpnState get state       => _state;
   List<Server> get servers => _servers;
-  Server? get selected => _selected;
-  V2RayStatus? get status => _status;
-  bool get isConnected => _state == VpnState.connected;
+  Server? get selected     => _selected;
+  bool get isConnected     => _state == VpnState.connected;
   Map<String, dynamic> get settings => _settings;
-  String? get error => _error;
-  bool get autoSelect => _autoSelect;
+  String? get error        => _error;
+  bool get autoSelect      => _autoSelect;
   DateTime? get lastUpdated => _lastUpdated;
+  String get routingMode   => _settings['routing_mode'] ?? 'global';
 
   String get totalSpeedStr {
-    if (_status == null) return '';
-    final up   = _parseSpeedBps(_status!.uploadSpeed.toString());
-    final down = _parseSpeedBps(_status!.downloadSpeed.toString());
-    return _formatBps(up + down);
+    final total = _uploadSpeed + _downloadSpeed;
+    if (total == 0) return '';
+    return _formatBps(total.toDouble());
   }
 
+  // ── Init ─────────────────────────────────────────────────────────────────
+
   VpnProvider() {
-    _v2ray = FlutterV2ray(
-      onStatusChanged: (status) {
-        final prevState = _state;
-        _status = status;
-        _state = switch (status.state) {
-          'CONNECTED'  => VpnState.connected,
-          'CONNECTING' => VpnState.connecting,
-          _            => VpnState.disconnected,
-        };
-        // Khi kết nối bị drop bất ngờ (không phải user bấm ngắt):
-        // → đợi 3s → ping lại tất cả server → kết nối server tốt nhất
-        if (_autoSelect &&
-            prevState == VpnState.connected &&
-            _state == VpnState.disconnected &&
-            !_userDisconnecting) {
-          Future.delayed(const Duration(seconds: 3), () {
-            if (_state == VpnState.disconnected && _autoSelect) {
-              _selected = null; // force re-ping on reconnect
-              connect();
-            }
-          });
-        }
-        notifyListeners();
-      },
-    );
     _init();
   }
 
@@ -79,62 +64,93 @@ class VpnProvider extends ChangeNotifier {
     final mode = await StorageService.getVpnMode();
     _autoSelect = mode.autoSelect;
     _savedSelectedUri = mode.selectedUri;
-    await _v2ray.initializeV2Ray(
-      notificationIconResourceType: 'mipmap',
-      notificationIconResourceName: 'ic_launcher',
-    );
     _initialized = true;
-    _startPingMonitor();
+    _vpnChannel.setMethodCallHandler(_handlePlatformCall);
     notifyListeners();
   }
 
-  // ── Background ping monitor (chạy cả khi app nền, vì có foreground VPN service) ──
+  // Nhận sự kiện từ Android (Quick Settings tile, network change)
+  Future<dynamic> _handlePlatformCall(MethodCall call) async {
+    switch (call.method) {
+      case 'toggleVpn':
+        await toggleVpn();
+        break;
+      case 'networkAvailable':
+        if (_autoSelect && _state == VpnState.disconnected && !_userDisconnecting) {
+          _reconnectAttempts = 0;
+          Future.delayed(const Duration(seconds: 1), () {
+            if (_state == VpnState.disconnected && _autoSelect) {
+              _selected = null;
+              connect();
+            }
+          });
+        }
+        break;
+      case 'networkLost':
+        break;
+    }
+  }
 
-  void _startPingMonitor() {
-    _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(minutes: 2), (_) {
-      if (_autoSelect && _state == VpnState.connected && _servers.length > 1 && !_checking) {
-        _checkAndSwitch();
+  // ── Status polling ────────────────────────────────────────────────────────
+
+  void _startPolling() {
+    _statusTimer?.cancel();
+    _trafficTimer?.cancel();
+
+    // Poll whether ClashVpnService is still running (2s interval)
+    _statusTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final running = await _clashChannel.invokeMethod<bool>('isRunning') ?? false;
+      final prevState = _state;
+      if (running) {
+        _state = VpnState.connected;
+        _lastConnectTime ??= DateTime.now();
+        _reconnectAttempts = 0;
+      } else if (_state != VpnState.disconnected) {
+        // Unexpected disconnect
+        _state = VpnState.disconnected;
+        if (_autoSelect && !_userDisconnecting) {
+          _scheduleReconnect();
+        }
+      }
+      if (_state != prevState) notifyListeners();
+    });
+
+    // Poll traffic every 1 second
+    _trafficTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      if (_state != VpnState.connected) return;
+      try {
+        final t = await _clashChannel.invokeMethod<Map>('getTraffic');
+        if (t != null) {
+          _uploadSpeed   = (t['up']   as int? ?? 0);
+          _downloadSpeed = (t['down'] as int? ?? 0);
+          notifyListeners();
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _stopPolling() {
+    _statusTimer?.cancel();
+    _trafficTimer?.cancel();
+    _statusTimer = null;
+    _trafficTimer = null;
+    _uploadSpeed = _downloadSpeed = 0;
+  }
+
+  // ── Reconnect logic ───────────────────────────────────────────────────────
+
+  void _scheduleReconnect() {
+    _reconnectAttempts++;
+    if (_reconnectAttempts > 3) return;
+    Future.delayed(Duration(seconds: 3 * _reconnectAttempts), () {
+      if (_state == VpnState.disconnected && _autoSelect) {
+        _selected = null;
+        connect();
       }
     });
   }
 
-  Future<void> _checkAndSwitch() async {
-    if (_checking) return;
-    _checking = true;
-    try {
-      // Ping song song tất cả server (2s timeout)
-      final results = await Future.wait(
-        _servers.map((s) async => (server: s, ping: await _pingDirect(s))),
-      );
-
-      Server? best;
-      int bestPing = 99999;
-      for (final r in results) {
-        if (r.ping > 0 && r.ping < bestPing) {
-          bestPing = r.ping;
-          best = r.server;
-        }
-      }
-
-      final currentPing = (_selected?.ping == null || _selected!.ping <= 0)
-          ? 99999
-          : _selected!.ping;
-
-      // Chuyển nếu server khác nhanh hơn ≥20ms (ping giờ đo trực tiếp, không qua tunnel)
-      if (best != null &&
-          best.rawUri != (_selected?.rawUri ?? '') &&
-          bestPing < currentPing - 20) {
-        _selected = best;
-        notifyListeners();
-        await _fastSwitch(); // stop → start ngay, không delay
-      }
-    } finally {
-      _checking = false;
-    }
-  }
-
-  // ── Server loading ───────────────────────────────────────────────────────
+  // ── Server loading ────────────────────────────────────────────────────────
 
   Future<void> loadServers(String subToken, {String? authData}) async {
     try {
@@ -153,7 +169,7 @@ class VpnProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // ── Server selection ─────────────────────────────────────────────────────
+  // ── Server selection ──────────────────────────────────────────────────────
 
   void selectServer(Server server) {
     _autoSelect = false;
@@ -161,39 +177,169 @@ class VpnProvider extends ChangeNotifier {
     _savedSelectedUri = server.rawUri;
     StorageService.saveVpnMode(autoSelect: false, selectedUri: server.rawUri);
     notifyListeners();
-    if (_state == VpnState.connected || _state == VpnState.connecting) {
-      _fastSwitch();
+
+    if (_state == VpnState.connected) {
+      // Instant switch via REST API — no VPN restart needed
+      _switchProxyNow(server.name);
+    } else {
+      connect();
     }
   }
 
   void setAutoSelect() {
     _autoSelect = true;
-    _selected = null; // force re-ping khi connect
+    _selected = null;
     _savedSelectedUri = null;
     StorageService.saveVpnMode(autoSelect: true, selectedUri: null);
     notifyListeners();
-    if (_state == VpnState.connected || _state == VpnState.connecting) {
-      _fastSwitch();
+
+    if (_state == VpnState.connected) {
+      _switchProxyNow('Auto');
+    } else {
+      connect();
     }
   }
 
-  // Stop → Start ngay lập tức, không delay — nhanh nhất có thể
-  Future<void> _fastSwitch() async {
+  /// Switch proxy group without restarting VPN — instant via Clash REST API.
+  Future<void> _switchProxyNow(String proxyName) async {
+    final ok = await ClashApi.selectProxy('PROXY', proxyName);
+    if (!ok) {
+      // REST not ready yet — restart VPN with new selection
+      await _restartVpn();
+    } else if (_autoSelect) {
+      // Let Clash's url-test group determine the best server, then reflect in UI
+      _refreshSelectedFromClash();
+    }
+  }
+
+  Future<void> _restartVpn() async {
     _userDisconnecting = true;
+    _connecting = false;
     _state = VpnState.connecting;
     notifyListeners();
     try {
-      await _v2ray.stopV2Ray();
-      await connect(); // _selected đã set sẵn → không re-ping, start luôn
-    } finally {
-      // Reset sau connect() để onStatusChanged muộn không trigger auto-reconnect
-      Future.delayed(const Duration(milliseconds: 200), () => _userDisconnecting = false);
+      await _clashChannel.invokeMethod('stop');
+    } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 300));
+    await connect();
+    Future.delayed(const Duration(seconds: 3), () {
+      _userDisconnecting = false;
+    });
+  }
+
+  Future<void> _refreshSelectedFromClash() async {
+    await Future.delayed(const Duration(seconds: 5));
+    try {
+      final proxies = await ClashApi.getProxies();
+      final auto = proxies?['Auto'] as Map?;
+      final nowName = auto?['now'] as String?;
+      if (nowName != null && nowName.isNotEmpty) {
+        _selected = _servers.firstWhere(
+          (s) => s.name == nowName,
+          orElse: () => _selected ?? _servers.first,
+        );
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  // ── Routing mode ──────────────────────────────────────────────────────────
+
+  Future<void> setRoutingMode(String mode) async {
+    if (_settings['routing_mode'] == mode) return;
+    _settings['routing_mode'] = mode;
+    await StorageService.saveSettings(_settings);
+    notifyListeners();
+
+    if (_state == VpnState.connected) {
+      // Try fast patch first, fall back to restart
+      final ok = await ClashApi.setMode(_clashModeStr(mode)).then((_) => true).catchError((_) => false);
+      if (!ok) await _restartVpn();
     }
   }
 
-  // ── VPN control ──────────────────────────────────────────────────────────
+  String _clashModeStr(String mode) => switch (mode) {
+        'direct' => 'direct',
+        'rules'  => 'rule',
+        _        => 'global',
+      };
 
-  // Ping tất cả server song song, chọn server ping thấp nhất
+  // ── VPN control ───────────────────────────────────────────────────────────
+
+  Future<void> toggleVpn() async {
+    if (!_initialized) return;
+    if (_state == VpnState.connected || _state == VpnState.connecting) {
+      await disconnect();
+    } else {
+      await connect();
+    }
+  }
+
+  Future<void> connect() async {
+    if (!_initialized) return;
+    if (!_autoSelect && _selected == null) return;
+    if (_servers.isEmpty) return;
+    if (_connecting) return;
+    _connecting = true;
+    _error = null;
+
+    try {
+      // If auto-select and no current selection, ping to pick best for initial config selection
+      if (_autoSelect && _selected == null) {
+        _state = VpnState.connecting;
+        notifyListeners();
+        await _pingAndPickBest();
+      }
+
+      // Request VPN permission
+      final granted = await _clashChannel.invokeMethod<bool>('requestPermission') ?? false;
+      if (!granted) return;
+
+      _state = VpnState.connecting;
+      notifyListeners();
+
+      final homeDir = await _clashChannel.invokeMethod<String>('getFilesDir') ?? '/data/data/com.vpnstore.app/files';
+      final clashHome = '$homeDir/clash';
+
+      final yaml = ClashConfigBuilder.build(_servers, _settings, routingMode);
+      await _clashChannel.invokeMethod('start', {'config': yaml, 'homeDir': clashHome});
+
+      // Wait for Clash REST API to be ready (max 10s)
+      await ClashApi.waitReady(maxWaitMs: 10000);
+
+      // Select the right proxy group after startup
+      if (_autoSelect) {
+        await ClashApi.selectProxy('PROXY', 'Auto');
+        _refreshSelectedFromClash();
+      } else if (_selected != null) {
+        await ClashApi.selectProxy('PROXY', _selected!.name);
+      }
+
+      _startPolling();
+      // State will be set to connected by the poller
+    } catch (e) {
+      _error = e.toString();
+      _state = VpnState.disconnected;
+      notifyListeners();
+    } finally {
+      _connecting = false;
+    }
+  }
+
+  Future<void> disconnect() async {
+    _userDisconnecting = true;
+    _stopPolling();
+    _state = VpnState.disconnected;
+    notifyListeners();
+    try {
+      await _clashChannel.invokeMethod('stop');
+    } catch (_) {}
+    _lastConnectTime = null;
+    Future.delayed(const Duration(milliseconds: 500), () => _userDisconnecting = false);
+  }
+
+  // ── Auto-select ping ──────────────────────────────────────────────────────
+
   Future<void> _pingAndPickBest() async {
     final results = await Future.wait(
       _servers.map((s) async => (server: s, ping: await _pingDirect(s))),
@@ -210,82 +356,26 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleVpn() async {
-    if (!_initialized) return;
-    if (_state == VpnState.connected || _state == VpnState.connecting) {
-      await disconnect();
-    } else {
-      await connect();
-    }
-  }
-
-  Future<void> connect() async {
-    if (!_autoSelect && _selected == null) return;
-    if (_autoSelect && _servers.isEmpty) return;
-    _error = null;
-
-    // Auto-select: chỉ ping khi chưa có server được chọn
-    if (_autoSelect && _selected == null) {
-      _state = VpnState.connecting;
-      notifyListeners();
-      await _pingAndPickBest();
-      if (_selected == null) {
-        _error = 'Không tìm được máy chủ khả dụng';
-        _state = VpnState.disconnected;
-        notifyListeners();
-        return;
-      }
-    }
-
-    final permission = await _v2ray.requestPermission();
-    if (!permission) return;
-
-    _state = VpnState.connecting;
-    notifyListeners();
-
-    try {
-      final String config;
-      if (_nativeProtocols.contains(_selected!.protocol)) {
-        config = FlutterV2ray.parseFromURL(_selected!.rawUri).getFullConfiguration();
-      } else {
-        config = XrayConfigBuilder.build(_selected!, _settings);
-      }
-      await _v2ray.startV2Ray(
-        remark: _autoSelect ? 'Auto - ${_selected!.name}' : _selected!.name,
-        config: config,
-        blockedApps: ['com.vpnstore.app'], // app tự bypass VPN → ping đo trực tiếp, không qua tunnel
-        bypassSubnets: null,
-      );
-    } catch (e) {
-      _error = e.toString();
-      _state = VpnState.disconnected;
-      notifyListeners();
-    }
-  }
-
-  Future<void> disconnect() async {
-    _userDisconnecting = true;
-    await _v2ray.stopV2Ray();
-    _state = VpnState.disconnected;
-    notifyListeners();
-    Future.delayed(const Duration(milliseconds: 200), () => _userDisconnecting = false);
-  }
-
   // ── Ping ─────────────────────────────────────────────────────────────────
 
-  // Ping nhanh 2s dùng khi chọn server tự động (song song)
+  Future<String> _resolveHost(String host, {int timeoutSec = 3}) async {
+    try {
+      final addrs = await InternetAddress.lookup(host).timeout(Duration(seconds: timeoutSec));
+      if (addrs.isNotEmpty) return addrs.first.address;
+    } catch (_) {}
+    return host;
+  }
+
   Future<int> _pingDirect(Server server) async {
+    final ip = await _resolveHost(server.host, timeoutSec: 2);
     final start = DateTime.now().millisecondsSinceEpoch;
     try {
-      final socket = await Socket.connect(
-        server.host, server.port,
-        timeout: const Duration(seconds: 2),
-      );
-      final delay = DateTime.now().millisecondsSinceEpoch - start;
+      final socket = await Socket.connect(ip, server.port, timeout: const Duration(seconds: 2));
+      final ms = DateTime.now().millisecondsSinceEpoch - start;
       socket.destroy();
-      server.ping = delay;
+      server.ping = ms;
       notifyListeners();
-      return delay;
+      return ms;
     } catch (_) {
       server.ping = -1;
       notifyListeners();
@@ -293,19 +383,27 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
-  // Ping 5s dùng từ UI (bấm ping thủ công)
+  /// Public ping — used from server list UI (5s timeout).
+  /// When connected, uses Clash's REST delay test for more realistic results.
   Future<int> pingServer(Server server) async {
+    if (_state == VpnState.connected) {
+      final ms = await ClashApi.testDelay(server.name, timeoutMs: 5000);
+      if (ms > 0) {
+        server.ping = ms;
+        notifyListeners();
+        return ms;
+      }
+    }
+    // Fallback: direct TCP socket
+    final ip = await _resolveHost(server.host, timeoutSec: 3);
     final start = DateTime.now().millisecondsSinceEpoch;
     try {
-      final socket = await Socket.connect(
-        server.host, server.port,
-        timeout: const Duration(seconds: 5),
-      );
-      final delay = DateTime.now().millisecondsSinceEpoch - start;
+      final socket = await Socket.connect(ip, server.port, timeout: const Duration(seconds: 5));
+      final ms = DateTime.now().millisecondsSinceEpoch - start;
       socket.destroy();
-      server.ping = delay;
+      server.ping = ms;
       notifyListeners();
-      return delay;
+      return ms;
     } catch (_) {
       server.ping = -1;
       notifyListeners();
@@ -313,29 +411,15 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
-  // ── Settings ─────────────────────────────────────────────────────────────
+  // ── Settings ──────────────────────────────────────────────────────────────
 
-  Future<void> updateSettings(Map<String, dynamic> settings) async {
-    _settings = settings;
-    await StorageService.saveSettings(settings);
+  Future<void> updateSettings(Map<String, dynamic> s) async {
+    _settings = s;
+    await StorageService.saveSettings(s);
     notifyListeners();
   }
 
   // ── Speed helpers ─────────────────────────────────────────────────────────
-
-  double _parseSpeedBps(String s) {
-    final t = s.trim();
-    final plain = double.tryParse(t);
-    if (plain != null) return plain;
-    final parts = t.split(RegExp(r'\s+'));
-    if (parts.length < 2) return 0;
-    final num = double.tryParse(parts[0]) ?? 0;
-    final unit = parts[1].toLowerCase();
-    if (unit.startsWith('gb')) return num * 1073741824;
-    if (unit.startsWith('mb')) return num * 1048576;
-    if (unit.startsWith('kb')) return num * 1024;
-    return num;
-  }
 
   String _formatBps(double bps) {
     if (bps >= 1073741824) return '${(bps / 1073741824).toStringAsFixed(1)} GB/s';
@@ -346,7 +430,7 @@ class VpnProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _pingTimer?.cancel();
+    _stopPolling();
     super.dispose();
   }
 }
