@@ -64,10 +64,10 @@ class ApplicationState extends ConsumerState<Application> {
   }
 
   Future<void> _checkAuth() async {
-    final url = await AuthStorage.getSubUrl();
+    final authenticated = await AuthStorage.isAuthenticated();
     if (mounted) {
       setState(() {
-        _isAuthenticated = url != null;
+        _isAuthenticated = authenticated;
         _authChecked = true;
       });
     }

@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthStorage {
   static const _keySubUrl = 'auth_sub_url';
+  static const _keyGuestMode = 'auth_guest_mode';
 
   static Future<String?> getSubUrl() async {
     final prefs = await SharedPreferences.getInstance();
@@ -11,18 +12,35 @@ class AuthStorage {
   static Future<void> saveSubUrl(String url) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keySubUrl, url);
+    await prefs.setBool(_keyGuestMode, false);
+  }
+
+  static Future<bool> isGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyGuestMode) ?? false;
+  }
+
+  static Future<void> setGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyGuestMode, true);
+  }
+
+  static Future<bool> isAuthenticated() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keySubUrl) != null ||
+        (prefs.getBool(_keyGuestMode) ?? false);
   }
 
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keySubUrl);
+    await prefs.remove(_keyGuestMode);
   }
 
   // Convert a token or URL into a Clash Meta subscription URL.
   static String toClashUrl(String input) {
     input = input.trim();
     if (input.startsWith('http://') || input.startsWith('https://')) {
-      // Already a URL — ensure flag=meta is set for Clash YAML format
       final uri = Uri.tryParse(input);
       if (uri == null) return input;
       final params = Map<String, String>.from(uri.queryParameters);
@@ -31,7 +49,7 @@ class AuthStorage {
       }
       return uri.replace(queryParameters: params).toString();
     }
-    // Treat as a token — construct VPNStore subscription URL
+    // Treat as a token
     const base = 'https://client-user.jiangsuhk.com/api/v1/client/subscribe';
     return '$base?token=$input&flag=meta';
   }
