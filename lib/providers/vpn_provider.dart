@@ -26,6 +26,8 @@ class VpnProvider extends ChangeNotifier {
   bool _checking = false;
   String? _savedSelectedUri;
   DateTime? _lastUpdated;
+  DateTime? _lastConnectTime;
+  int _reconnectAttempts = 0;
   Timer? _pingTimer;
 
   VpnState get state => _state;
@@ -55,19 +57,30 @@ class VpnProvider extends ChangeNotifier {
           'CONNECTING' => VpnState.connecting,
           _            => VpnState.disconnected,
         };
-        // Khi kết nối bị drop bất ngờ (không phải user bấm ngắt):
-        // → đợi 3s → ping lại tất cả server → kết nối server tốt nhất
+
+        if (_state == VpnState.connected) {
+          _lastConnectTime = DateTime.now();
+          _reconnectAttempts = 0;
+        }
+
+        // Drop từ CONNECTED → DISCONNECTED bất ngờ: reconnect ngay
         if (_autoSelect &&
             prevState == VpnState.connected &&
             _state == VpnState.disconnected &&
             !_userDisconnecting) {
-          Future.delayed(const Duration(seconds: 3), () {
-            if (_state == VpnState.disconnected && _autoSelect) {
-              _selected = null; // force re-ping on reconnect
-              connect();
-            }
-          });
+          _reconnectAttempts = 0;
+          _scheduleReconnect();
         }
+
+        // Kết nối thất bại (CONNECTING → DISCONNECTED): retry với backoff, tối đa 3 lần
+        if (_autoSelect &&
+            prevState == VpnState.connecting &&
+            _state == VpnState.disconnected &&
+            !_userDisconnecting &&
+            _reconnectAttempts < 3) {
+          _scheduleReconnect();
+        }
+
         notifyListeners();
       },
     );
@@ -86,6 +99,17 @@ class VpnProvider extends ChangeNotifier {
     _initialized = true;
     _startPingMonitor();
     notifyListeners();
+  }
+
+  void _scheduleReconnect() {
+    _reconnectAttempts++;
+    final delay = Duration(seconds: 3 * _reconnectAttempts); // backoff: 3s → 6s → 9s
+    Future.delayed(delay, () {
+      if (_state == VpnState.disconnected && _autoSelect) {
+        _selected = null; // force re-ping
+        connect();
+      }
+    });
   }
 
   // ── Background ping monitor (chạy cả khi app nền, vì có foreground VPN service) ──
@@ -121,10 +145,16 @@ class VpnProvider extends ChangeNotifier {
           ? 99999
           : _selected!.ping;
 
-      // Chuyển nếu server khác nhanh hơn ≥20ms (ping giờ đo trực tiếp, không qua tunnel)
+      // Không switch nếu vừa kết nối trong 5 phút qua (tránh switch ngay sau connect)
+      final sinceConnect = _lastConnectTime != null
+          ? DateTime.now().difference(_lastConnectTime!)
+          : const Duration(days: 1);
+      if (sinceConnect.inMinutes < 5) return;
+
+      // Chuyển nếu server khác nhanh hơn ≥100ms — threshold cao hơn để tránh switch do jitter mạng
       if (best != null &&
           best.rawUri != (_selected?.rawUri ?? '') &&
-          bestPing < currentPing - 20) {
+          bestPing < currentPing - 100) {
         _selected = best;
         notifyListeners();
         await _fastSwitch(); // stop → start ngay, không delay
