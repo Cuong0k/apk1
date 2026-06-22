@@ -110,5 +110,6 @@ class StorageService {
     'sniffing': true,
     'routing_mode': 'global',
     'log_level': 'error',
+    'silent_auto_select': false,
   };
 }

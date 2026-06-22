@@ -54,22 +54,20 @@ class _ServerListScreenState extends State<ServerListScreen> {
         actions: [
           if (_pingingAll)
             const Padding(
-              padding: EdgeInsets.all(14),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: SizedBox(
                 width: 20, height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent),
               ),
             )
           else
-            IconButton(
-              icon: const Icon(Icons.network_ping, color: AppTheme.accent),
-              tooltip: 'Ping tất cả',
+            TextButton(
               onPressed: vpn.servers.isEmpty ? null : _pingAll,
+              child: const Text(
+                'CHECK',
+                style: TextStyle(color: AppTheme.accent, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
             ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _refresh,
-          ),
         ],
       ),
       body: vpn.servers.isEmpty
@@ -115,26 +113,35 @@ class _ServerListScreenState extends State<ServerListScreen> {
                     ),
                     trailing: GestureDetector(
                       onTap: (isPinging || _pingingAll) ? null : () => _ping(server),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _pingColor(server.ping).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: isPinging
-                            ? const SizedBox(
+                      child: isPinging
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: context.c4,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const SizedBox(
                                 width: 14, height: 14,
                                 child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Text(
-                                server.ping == -1 ? 'Ping' : '${server.ping}ms',
-                                style: TextStyle(
-                                  color: _pingColor(server.ping),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
                               ),
-                      ),
+                            )
+                          : server.ping == -1
+                              ? const SizedBox(width: 36, height: 28)
+                              : Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: _pingColor(server.ping).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${server.ping}ms',
+                                    style: TextStyle(
+                                      color: _pingColor(server.ping),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
                     ),
                     onTap: () {
                       vpn.selectServer(server);

@@ -163,6 +163,8 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
     if (_state == VpnState.connected || _state == VpnState.connecting) {
       _fastSwitch();
+    } else {
+      connect();
     }
   }
 
@@ -174,6 +176,8 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
     if (_state == VpnState.connected || _state == VpnState.connecting) {
       _fastSwitch();
+    } else {
+      connect();
     }
   }
 
@@ -251,7 +255,9 @@ class VpnProvider extends ChangeNotifier {
         config = XrayConfigBuilder.build(_selected!, _settings);
       }
       await _v2ray.startV2Ray(
-        remark: _autoSelect ? 'Auto - ${_selected!.name}' : _selected!.name,
+        remark: _autoSelect
+            ? (_settings['silent_auto_select'] == true ? 'VPN Store' : 'Auto - ${_selected!.name}')
+            : _selected!.name,
         config: config,
         blockedApps: ['com.vpnstore.app'], // app tự bypass VPN → ping đo trực tiếp, không qua tunnel
         bypassSubnets: null,

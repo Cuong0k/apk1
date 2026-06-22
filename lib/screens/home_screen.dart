@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/vpn_provider.dart';
@@ -15,8 +18,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const _apkUrl = 'https://client-user.jiangsuhk.com/app/update/vpnstore.apk';
+  static const _updateChannel = MethodChannel('com.vpnstore.app/update');
+
   int _tab = 0;
   bool _updating = false;
+  bool _downloadingApp = false;
+  double? _downloadProgress;
+  String? _downloadError;
 
   @override
   void initState() {
@@ -30,6 +39,26 @@ class _HomeScreenState extends State<HomeScreen> {
     await auth.refreshUser();
     if (auth.user != null) {
       await vpn.loadServers(auth.user!.token, authData: auth.user!.authData);
+    }
+  }
+
+  Future<void> _downloadAndInstall() async {
+    setState(() { _downloadingApp = true; _downloadProgress = 0; _downloadError = null; });
+    try {
+      final cacheDir = await _updateChannel.invokeMethod<String>('getCacheDir');
+      final savePath = '$cacheDir/vpnstore_update.apk';
+      await Dio().download(
+        _apkUrl,
+        savePath,
+        onReceiveProgress: (received, total) {
+          if (total > 0 && mounted) setState(() => _downloadProgress = received / total);
+        },
+      );
+      if (mounted) await _updateChannel.invokeMethod('installApk', {'path': savePath});
+    } catch (e) {
+      if (mounted) setState(() => _downloadError = 'Lỗi tải xuống: $e');
+    } finally {
+      if (mounted) setState(() { _downloadingApp = false; _downloadProgress = null; });
     }
   }
 
@@ -351,6 +380,62 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icons.calendar_today_outlined,
                 ),
               ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+          _SectionLabel('Cập nhật ứng dụng'),
+          Card(
+            child: InkWell(
+              onTap: _downloadingApp ? null : _downloadAndInstall,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.system_update_outlined, color: AppTheme.accent),
+                        const SizedBox(width: 12),
+                        Text('Cập nhật ứng dụng',
+                            style: TextStyle(color: context.c1, fontSize: 14, fontWeight: FontWeight.w500)),
+                        const Spacer(),
+                        if (_downloadingApp)
+                          const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent),
+                          )
+                        else
+                          const Text('Tải xuống',
+                              style: TextStyle(color: AppTheme.accent, fontSize: 13, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                    if (_downloadingApp && _downloadProgress != null) ...[
+                      const SizedBox(height: 10),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: _downloadProgress,
+                          backgroundColor: context.c4,
+                          color: AppTheme.accent,
+                          minHeight: 5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${(_downloadProgress! * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(color: context.c3, fontSize: 11),
+                      ),
+                    ],
+                    if (_downloadError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(_downloadError!,
+                          style: const TextStyle(color: AppTheme.disconnected, fontSize: 12)),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ],
