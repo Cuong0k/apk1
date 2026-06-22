@@ -122,7 +122,8 @@ class ClashConfigBuilder {
   static bool _supportsProtocol(String p) =>
       const {'vless', 'vmess', 'trojan', 'ss', 'tuic', 'hy2'}.contains(p);
 
-  static String _q(String s) => '"${s.replaceAll('"', '\\"')}"';
+  // Quote a YAML string value — escapes backslash and double-quote characters.
+  static String _q(String s) => '"${s.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"';
 
   // Returns YAML block for one proxy, or null if unsupported.
   static String? _proxyEntry(Server s, bool allowInsecure) {
@@ -201,7 +202,7 @@ class ClashConfigBuilder {
     b.writeln('    type: trojan');
     b.writeln('    server: ${s.host}');
     b.writeln('    port: ${s.port}');
-    b.writeln('    password: ${s.uuid}');
+    b.writeln('    password: ${_q(s.uuid)}');
     b.writeln('    network: $net');
     if (ai || (p['allowInsecure'] == '1')) b.writeln('    skip-cert-verify: true');
     final sni = p['sni'] ?? p['host'] ?? s.host;
@@ -239,7 +240,7 @@ class ClashConfigBuilder {
     b.writeln('    alpn: [${(p['alpn'] ?? 'h3').split(',').map((a) => '"$a"').join(', ')}]');
     if (ai || (p['allowInsecure'] == '1')) b.writeln('    skip-cert-verify: true');
     final sni = p['sni'] ?? s.host;
-    b.writeln('    sni: $sni');
+    b.writeln('    sni: ${_q(sni)}');
     return b.toString();
   }
 
@@ -251,13 +252,13 @@ class ClashConfigBuilder {
     b.writeln('    type: hysteria2');
     b.writeln('    server: ${s.host}');
     b.writeln('    port: ${s.port}');
-    b.writeln('    password: ${s.uuid}');
+    b.writeln('    password: ${_q(s.uuid)}');
     if (ai || (p['insecure'] == '1')) b.writeln('    skip-cert-verify: true');
     final sni = p['sni'] ?? s.host;
-    b.writeln('    sni: $sni');
+    b.writeln('    sni: ${_q(sni)}');
     if (p['obfs'] != null) {
       b.writeln('    obfs: ${p['obfs']}');
-      if (p['obfs-password'] != null) b.writeln('    obfs-password: ${p['obfs-password']}');
+      if (p['obfs-password'] != null) b.writeln('    obfs-password: ${_q(p['obfs-password']!)}');
     }
     return b.toString();
   }

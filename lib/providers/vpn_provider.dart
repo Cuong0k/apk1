@@ -293,7 +293,11 @@ class VpnProvider extends ChangeNotifier {
 
       // Request VPN permission
       final granted = await _clashChannel.invokeMethod<bool>('requestPermission') ?? false;
-      if (!granted) return;
+      if (!granted) {
+        _state = VpnState.disconnected;
+        notifyListeners();
+        return;
+      }
 
       _state = VpnState.connecting;
       notifyListeners();

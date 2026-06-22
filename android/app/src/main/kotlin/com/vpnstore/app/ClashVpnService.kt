@@ -67,10 +67,15 @@ class ClashVpnService : VpnService() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                if (!startClash(homeDir, config)) {
-                    stopForegroundCompat()
-                    stopSelf()
-                }
+                // Run heavy Clash init on a background thread to avoid blocking the main thread
+                Thread {
+                    if (!startClash(homeDir, config)) {
+                        Handler(Looper.getMainLooper()).post {
+                            stopForegroundCompat()
+                            stopSelf()
+                        }
+                    }
+                }.start()
             }
             ACTION_STOP -> {
                 stopClash()
@@ -153,7 +158,10 @@ class ClashVpnService : VpnService() {
         try {
             val result = Core.quickSetup(homeDir)
             if (result.isNotEmpty() && result != "success") {
-                android.util.Log.w("ClashVPN", "quickSetup: $result")
+                android.util.Log.e("ClashVPN", "quickSetup failed: $result")
+                tun.close()
+                tunFd = null
+                return false
             }
         } catch (e: Throwable) {
             android.util.Log.e("ClashVPN", "quickSetup failed: ${e.message}")
