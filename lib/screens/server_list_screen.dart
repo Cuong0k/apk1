@@ -28,14 +28,17 @@ class _ServerListScreenState extends State<ServerListScreen> {
   }
 
   Future<void> _pingAll() async {
-    setState(() => _pingingAll = true);
     final vpn = context.read<VpnProvider>();
-    for (final server in vpn.servers) {
-      setState(() => _pinging.add(server.rawUri));
+    // Đánh dấu tất cả đang ping cùng lúc (giống ShadowClash — song song, không tuần tự)
+    setState(() {
+      _pingingAll = true;
+      for (final s in vpn.servers) _pinging.add(s.rawUri);
+    });
+    await Future.wait(vpn.servers.map((server) async {
       await vpn.pingServer(server);
-      setState(() => _pinging.remove(server.rawUri));
-    }
-    setState(() => _pingingAll = false);
+      if (mounted) setState(() => _pinging.remove(server.rawUri));
+    }));
+    if (mounted) setState(() => _pingingAll = false);
   }
 
   Future<void> _ping(Server server) async {

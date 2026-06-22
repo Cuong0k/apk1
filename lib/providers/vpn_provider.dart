@@ -344,19 +344,28 @@ class VpnProvider extends ChangeNotifier {
 
   // ── Ping ─────────────────────────────────────────────────────────────────
 
+  // Resolve hostname → IP trước khi đo để loại DNS khỏi ping (giống ShadowClash)
+  Future<String> _resolveHost(String host, {int timeoutSec = 3}) async {
+    try {
+      final addrs = await InternetAddress.lookup(host)
+          .timeout(Duration(seconds: timeoutSec));
+      if (addrs.isNotEmpty) return addrs.first.address;
+    } catch (_) {}
+    return host; // fallback: dùng hostname nếu resolve thất bại
+  }
+
   // Ping nhanh 2s dùng khi chọn server tự động (song song)
   Future<int> _pingDirect(Server server) async {
+    final ip = await _resolveHost(server.host, timeoutSec: 2);
     final start = DateTime.now().millisecondsSinceEpoch;
     try {
-      final socket = await Socket.connect(
-        server.host, server.port,
-        timeout: const Duration(seconds: 2),
-      );
-      final delay = DateTime.now().millisecondsSinceEpoch - start;
+      final socket = await Socket.connect(ip, server.port,
+          timeout: const Duration(seconds: 2));
+      final ms = DateTime.now().millisecondsSinceEpoch - start;
       socket.destroy();
-      server.ping = delay;
+      server.ping = ms;
       notifyListeners();
-      return delay;
+      return ms;
     } catch (_) {
       server.ping = -1;
       notifyListeners();
@@ -366,17 +375,16 @@ class VpnProvider extends ChangeNotifier {
 
   // Ping 5s dùng từ UI (bấm ping thủ công)
   Future<int> pingServer(Server server) async {
+    final ip = await _resolveHost(server.host, timeoutSec: 3);
     final start = DateTime.now().millisecondsSinceEpoch;
     try {
-      final socket = await Socket.connect(
-        server.host, server.port,
-        timeout: const Duration(seconds: 5),
-      );
-      final delay = DateTime.now().millisecondsSinceEpoch - start;
+      final socket = await Socket.connect(ip, server.port,
+          timeout: const Duration(seconds: 5));
+      final ms = DateTime.now().millisecondsSinceEpoch - start;
       socket.destroy();
-      server.ping = delay;
+      server.ping = ms;
       notifyListeners();
-      return delay;
+      return ms;
     } catch (_) {
       server.ping = -1;
       notifyListeners();
