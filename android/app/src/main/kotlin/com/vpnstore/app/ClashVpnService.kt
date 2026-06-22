@@ -142,10 +142,30 @@ class ClashVpnService : VpnService() {
         isRunning = false
         trafficHandler?.removeCallbacks(trafficRunnable)
 
-        writeLog("stopTun: about to call (loads native libs)")
-        try { Core.stopTun() } catch (_: Throwable) {}
-        writeLog("stopTun: done (libs loaded OK)")
+        // Load each library separately so we can pinpoint which one causes a crash.
+        // (If System.loadLibrary triggers a Go runtime SIGABRT, the process dies
+        //  without returning, so the next log line after this one tells us exactly
+        //  which library or call is at fault.)
+        writeLog("loadLib: clash")
+        try {
+            System.loadLibrary("clash")
+            writeLog("loadLib: clash OK")
+        } catch (e: Throwable) {
+            writeLog("loadLib: clash FAIL ${e.javaClass.simpleName}: ${e.message}")
+            return false
+        }
+        writeLog("loadLib: core")
+        try {
+            System.loadLibrary("core")
+            writeLog("loadLib: core OK")
+        } catch (e: Throwable) {
+            writeLog("loadLib: core FAIL ${e.javaClass.simpleName}: ${e.message}")
+            return false
+        }
 
+        // Do NOT call stopTun() here — if nothing was ever started, Go's stopTun
+        // implementation may panic with a nil-pointer (nothing to stop).
+        // We'll call stopTun only in stopClash() when we know it was running.
         tunFd?.close()
         tunFd = null
 
