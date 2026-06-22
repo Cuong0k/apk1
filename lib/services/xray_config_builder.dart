@@ -42,6 +42,15 @@ class XrayConfigBuilder {
         {'ipPool': '198.18.0.0/15', 'poolSize': 65535},
       ],
       'dns': {
+        // Hardcode IP của DoH servers → tránh circular DNS khi giải địa chỉ DoH server
+        // Tương đương default-nameserver / nameserver-policy của ShadowClash
+        'hosts': {
+          'cloudflare-dns.com': '1.1.1.1',
+          'dns.cloudflare.com': '1.1.1.1',
+          'dns.google': '8.8.8.8',
+          'dns.google.com': '8.8.8.8',
+          'one.one.one.one': '1.1.1.1',
+        },
         'servers': [
           'fakedns',           // Ưu tiên fake DNS — phản hồi tức thì
           'https+local://cloudflare-dns.com/dns-query', // DoH fallback (giải ngoài tunnel)

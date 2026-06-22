@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import '../models/server.dart';
 import '../services/api_service.dart';
@@ -8,6 +9,7 @@ import '../services/storage_service.dart';
 import '../services/xray_config_builder.dart';
 
 const _nativeProtocols = {'vless', 'vmess', 'trojan', 'ss'};
+const _vpnChannel = MethodChannel('com.vpnstore.app/vpn');
 
 enum VpnState { disconnected, connecting, connected }
 
@@ -98,7 +100,32 @@ class VpnProvider extends ChangeNotifier {
     );
     _initialized = true;
     _startPingMonitor();
+    _vpnChannel.setMethodCallHandler(_handlePlatformCall);
     notifyListeners();
+  }
+
+  // Nhận lệnh từ Android: toggle từ Quick Settings tile, phát hiện thay đổi mạng
+  Future<dynamic> _handlePlatformCall(MethodCall call) async {
+    switch (call.method) {
+      case 'toggleVpn':
+        await toggleVpn();
+        break;
+      case 'networkAvailable':
+        // Mạng trở lại (4G↔WiFi switch) — nếu VPN đang ngắt và auto-select bật, kết nối lại
+        if (_autoSelect && _state == VpnState.disconnected && !_userDisconnecting) {
+          _reconnectAttempts = 0;
+          Future.delayed(const Duration(seconds: 1), () {
+            if (_state == VpnState.disconnected && _autoSelect) {
+              _selected = null;
+              connect();
+            }
+          });
+        }
+        break;
+      case 'networkLost':
+        // VPN sẽ tự ngắt → auto-reconnect xử lý
+        break;
+    }
   }
 
   void _scheduleReconnect() {
