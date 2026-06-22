@@ -34,6 +34,21 @@ jobs:
             https://github.com/Cuong0k/apk1/releases/download/native-libs-v1/libclash.so
           ls -lh android/core/src/main/jniLibs/arm64-v8a/
 
+      - name: Build libcore.so with NDK
+        run: |
+          NDK_CLANG="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
+          CPP_DIR="android/core/src/main/cpp"
+          JNI_DIR="android/core/src/main/jniLibs/arm64-v8a"
+          $NDK_CLANG -shared -fPIC -DLIBCLASH -O2 \
+            -I "$CPP_DIR" \
+            -I "$CPP_DIR/includes/arm64-v8a" \
+            -L "$JNI_DIR" \
+            "$CPP_DIR/jni_helper.cpp" \
+            "$CPP_DIR/core.cpp" \
+            -lclash -llog \
+            -o "$JNI_DIR/libcore.so"
+          ls -lh "$JNI_DIR/"
+
       - name: Get Flutter dependencies
         run: flutter pub get
 
