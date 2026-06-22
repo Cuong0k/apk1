@@ -29,10 +29,10 @@ jobs:
 
       - name: Download pre-built libclash.so
         run: |
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          curl -L -o android/app/src/main/jniLibs/arm64-v8a/libclash.so \
+          mkdir -p android/core/src/main/jniLibs/arm64-v8a
+          curl -L -o android/core/src/main/jniLibs/arm64-v8a/libclash.so \
             https://github.com/Cuong0k/apk1/releases/download/native-libs-v1/libclash.so
-          ls -lh android/app/src/main/jniLibs/arm64-v8a/
+          ls -lh android/core/src/main/jniLibs/arm64-v8a/
 
       - name: Get Flutter dependencies
         run: flutter pub get

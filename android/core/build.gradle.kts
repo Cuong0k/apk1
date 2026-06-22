@@ -14,6 +14,11 @@ android {
         minSdk = libs.versions.minSdk.get().toInt()
     }
 
+    externalNativeBuild {
+        cmake {
+            path = "src/main/cpp/CMakeLists.txt"
+        }
+    }
 
     sourceSets {
         getByName("main") {

@@ -57,9 +57,10 @@ docs/
 /android/common/**/.**/
 /android/common/local.*
 /android/core/**/includes/
+!/android/core/src/main/cpp/includes/arm64-v8a/libclash.h
+!/android/core/src/main/cpp/includes/arm64-v8a/bride.h
 /android/core/**/cmake-build-*/
 /android/core/**/jniLibs/
-!/android/core/src/main/jniLibs/arm64-v8a/libcore.so
 
 #FlClash
 /libclash/

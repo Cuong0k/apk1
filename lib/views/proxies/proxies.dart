@@ -4,6 +4,8 @@ import 'package:fl_clash/models/common.dart';
 import 'package:fl_clash/models/state.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
+import 'package:fl_clash/views/dashboard/widgets/network_detection.dart';
+import 'package:fl_clash/views/dashboard/widgets/traffic_usage.dart';
 import 'package:fl_clash/views/profiles/add.dart';
 import 'package:fl_clash/views/proxies/list.dart';
 import 'package:fl_clash/views/proxies/providers.dart';
@@ -91,27 +93,16 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
   }
 
   void _handleShowAddProfile() {
+    final ctx = globalState.navigatorKey.currentState?.context ?? context;
     showExtend(
-      globalState.navigatorKey.currentState!.context,
+      ctx,
       builder: (_) {
         return AdaptiveSheetScaffold(
-          body: AddProfileView(
-            context: globalState.navigatorKey.currentState!.context,
-          ),
+          body: AddProfileView(context: ctx),
           title: context.appLocalizations.addProfile,
         );
       },
     );
-  }
-
-  Widget? _buildFAB() {
-    return _isTab
-        ? DelayTestButton(
-            onClick: () async {
-              await _proxiesTabKey.currentState?.delayTestCurrentGroup();
-            },
-          )
-        : null;
   }
 
   void _onSearch(String value) {
@@ -126,6 +117,11 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
           profilesProvider.select((s) => s.isNotEmpty),
         );
         if (!hasProfiles) return const SizedBox.shrink();
+        final profileLabel = ref.watch(
+          currentProfileProvider.select(
+            (s) => s?.label.isNotEmpty == true ? s!.label : s?.id.toString() ?? '',
+          ),
+        );
         return Container(
           padding: EdgeInsets.symmetric(horizontal: 16.ap, vertical: 4),
           child: Row(
@@ -141,7 +137,9 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
               Expanded(
                 child: Text(
                   isStart
-                      ? context.appLocalizations.connected
+                      ? (profileLabel.isNotEmpty
+                          ? profileLabel
+                          : context.appLocalizations.connected)
                       : context.appLocalizations.disconnected,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w500,
@@ -149,6 +147,8 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
                         ? Theme.of(context).colorScheme.primary
                         : null,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               Switch(
@@ -167,6 +167,50 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
     );
   }
 
+  Widget _buildLatencyRow() {
+    return Consumer(
+      builder: (context, ref, _) {
+        final hasProfiles = ref.watch(
+          profilesProvider.select((s) => s.isNotEmpty),
+        );
+        if (!hasProfiles) return const SizedBox.shrink();
+        return InkWell(
+          onTap: () async {
+            if (_isTab) {
+              await _proxiesTabKey.currentState?.delayTestCurrentGroup();
+            }
+          },
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 16.ap, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.access_time_outlined,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    context.appLocalizations.delayTest,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.play_circle_outline,
+                  size: 22,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildModeRow() {
     return Consumer(
       builder: (context, ref, _) {
@@ -178,45 +222,131 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
           patchClashConfigProvider.select((s) => s.mode),
         );
         return Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8.ap, vertical: 4),
+          padding: EdgeInsets.symmetric(horizontal: 8.ap, vertical: 2),
           child: Row(
-            children: Mode.values.map((m) {
-              final isSelected = m == mode;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    globalState.container
-                        .read(setupActionProvider.notifier)
-                        .changeMode(m);
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(vertical: 7),
-                    margin: EdgeInsets.symmetric(horizontal: 3.ap),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withAlpha(100),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      Intl.message(m.name),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.normal,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(right: 4.ap),
+                child: Icon(
+                  Icons.alt_route_outlined,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              ...Mode.values.map((m) {
+                final isSelected = m == mode;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      globalState.container
+                          .read(setupActionProvider.notifier)
+                          .changeMode(m);
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      margin: EdgeInsets.symmetric(horizontal: 3.ap),
+                      decoration: BoxDecoration(
                         color: isSelected
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withAlpha(100),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        Intl.message(m.name),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),
+                );
+              }),
+              Padding(
+                padding: EdgeInsets.only(left: 4.ap),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () async {
+                        if (_isTab) {
+                          await _proxiesTabKey.currentState
+                              ?.delayTestCurrentGroup();
+                        }
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.refresh,
+                          size: 17,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () {
+                        showSheet(
+                          context: context,
+                          props: const SheetProps(isScrollControlled: true),
+                          builder: (_) {
+                            return AdaptiveSheetScaffold(
+                              body: const ProxiesSetting(),
+                              title: context.appLocalizations.settings,
+                            );
+                          },
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.filter_list,
+                          size: 17,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomCards() {
+    return Consumer(
+      builder: (context, ref, _) {
+        final hasProfiles = ref.watch(
+          profilesProvider.select((s) => s.isNotEmpty),
+        );
+        if (!hasProfiles) return const SizedBox.shrink();
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8.ap, vertical: 8),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: NetworkDetection()),
+              SizedBox(width: 8),
+              Expanded(child: TrafficUsage()),
+            ],
           ),
         );
       },
@@ -269,7 +399,6 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
       key: _scaffoldKey,
       isLoading: isLoading,
       resizeToAvoidBottomInset: false,
-      floatingActionButton: _buildFAB(),
       actions: _buildActions(context),
       title: appName,
       searchState: AppBarSearchState(onSearch: _onSearch),
@@ -277,6 +406,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildVpnRow(),
+          _buildLatencyRow(),
           _buildModeRow(),
           Divider(
             height: 1,
@@ -288,6 +418,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
               ProxiesType.list => const ProxiesListView(),
             },
           ),
+          _buildBottomCards(),
         ],
       ),
     );
