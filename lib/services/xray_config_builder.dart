@@ -46,7 +46,7 @@ class XrayConfigBuilder {
           'port': 10808,
           'listen': '127.0.0.1',
           'protocol': 'socks',
-          'settings': {'auth': 'noauth', 'udp': udp},
+          'settings': {'auth': 'noauth', 'udp': udp, 'userLevel': 8},
           'sniffing': {
             'enabled': sniffing,
             'destOverride': ['http', 'tls', 'quic'],
@@ -57,12 +57,27 @@ class XrayConfigBuilder {
           'port': 10809,
           'listen': '127.0.0.1',
           'protocol': 'http',
-          'settings': {},
+          'settings': {'userLevel': 8},
         },
       ],
       'outbounds': [],
+      'policy': {
+        'levels': {
+          '8': {
+            'connIdle': 300,
+            'downlinkOnly': 1,
+            'handshake': 4,
+            'uplinkOnly': 1,
+          },
+        },
+        'system': {
+          'statsOutboundDownlink': true,
+          'statsOutboundUplink': true,
+        },
+      },
+      'stats': {},
       'routing': {
-        'domainStrategy': 'IPIfNonMatch',
+        'domainStrategy': routingMode == 'global' ? 'AsIs' : 'IPIfNonMatch',
         'rules': routingRules,
       },
       'transport': {},
@@ -293,10 +308,11 @@ class XrayConfigBuilder {
     final allowInsecure = settings['allow_insecure'] == true || p['allowInsecure'] == '1';
     final result = <String, dynamic>{'network': network, 'security': security};
 
-    // TCP optimization for weak/laggy networks
-    if (network == 'tcp' || network == 'ws' || network == 'h2' || network == 'http') {
+    // TCP optimization — applies to all TCP-based transports
+    if (network == 'tcp' || network == 'ws' || network == 'h2' || network == 'http' || network == 'grpc') {
       result['sockopt'] = {
         'tcpFastOpen': true,
+        'tcpNoDelay': true,
         'tcpKeepAliveInterval': 15,
         'tcpKeepAliveIdle': 30,
       };
