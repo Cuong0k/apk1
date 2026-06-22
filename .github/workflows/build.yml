@@ -27,15 +27,19 @@ jobs:
           flutter-version: 3.41.9
           cache: true
 
-      - name: Download pre-built libclash.so
+      - name: Download pre-built libclash.so and build libcore.so
         run: |
-          mkdir -p android/core/src/main/jniLibs/arm64-v8a
-          curl -L -o android/core/src/main/jniLibs/arm64-v8a/libclash.so \
+          # Download to app jniLibs — this is the path plugin.gradle checks to skip Go build
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          curl -L -o android/app/src/main/jniLibs/arm64-v8a/libclash.so \
             https://github.com/Cuong0k/apk1/releases/download/native-libs-v1/libclash.so
-          ls -lh android/core/src/main/jniLibs/arm64-v8a/
 
-      - name: Build libcore.so with NDK
-        run: |
+          # Also copy to core jniLibs for NDK linking
+          mkdir -p android/core/src/main/jniLibs/arm64-v8a
+          cp android/app/src/main/jniLibs/arm64-v8a/libclash.so \
+             android/core/src/main/jniLibs/arm64-v8a/libclash.so
+
+          # Compile real libcore.so (JNI bridge) with NDK — no Go build needed
           NDK_CLANG="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++"
           CPP_DIR="android/core/src/main/cpp"
           JNI_DIR="android/core/src/main/jniLibs/arm64-v8a"
@@ -47,6 +51,7 @@ jobs:
             "$CPP_DIR/core.cpp" \
             -lclash -llog \
             -o "$JNI_DIR/libcore.so"
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/
           ls -lh "$JNI_DIR/"
 
       - name: Get Flutter dependencies
