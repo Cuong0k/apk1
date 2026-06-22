@@ -98,6 +98,7 @@ static void call_tun_interface_protect_impl(void *tun_interface, const int fd) {
     env->CallVoidMethod(static_cast<jobject>(tun_interface),
                         m_tun_interface_protect,
                         fd);
+    if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
 static char *
@@ -106,21 +107,37 @@ call_tun_interface_resolve_process_impl(void *tun_interface, const int protocol,
                                         const char *target,
                                         const int uid) {
     ATTACH_JNI();
+    const auto src_str = new_string(source);
+    const auto tgt_str = new_string(target);
     const auto packageName = reinterpret_cast<jstring>(env->CallObjectMethod(
             static_cast<jobject>(tun_interface),
             m_tun_interface_resolve_process,
             protocol,
-            new_string(source),
-            new_string(target),
+            src_str,
+            tgt_str,
             uid));
-    return get_string(packageName);
+    env->DeleteLocalRef(src_str);
+    env->DeleteLocalRef(tgt_str);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        return strdup("");
+    }
+    if (packageName == nullptr) {
+        return strdup("");
+    }
+    const auto result = get_string(packageName);
+    env->DeleteLocalRef(packageName);
+    return result;
 }
 
 static void call_invoke_interface_result_impl(void *invoke_interface, const char *data) {
     ATTACH_JNI();
+    const auto str = new_string(data);
     env->CallVoidMethod(static_cast<jobject>(invoke_interface),
                         m_invoke_interface_result,
-                        new_string(data));
+                        str);
+    env->DeleteLocalRef(str);
+    if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
 extern "C"

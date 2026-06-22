@@ -183,7 +183,7 @@ abstract class ProxiesStyleProps with _$ProxiesStyleProps {
     @Default(ProxiesSortType.none) ProxiesSortType sortType,
     @Default(ProxiesLayout.standard) ProxiesLayout layout,
     @Default(ProxiesIconStyle.standard) ProxiesIconStyle iconStyle,
-    @Default(ProxyCardType.expand) ProxyCardType cardType,
+    @Default(ProxyCardType.min) ProxyCardType cardType,
   }) = _ProxiesStyleProps;
 
   factory ProxiesStyleProps.fromJson(Map<String, Object?>? json) => json == null
@@ -221,7 +221,7 @@ abstract class ThemeProps with _$ThemeProps {
       return defaultThemeProps;
     }
     try {
-      return ThemeProps.fromJson(json);
+      return ThemeProps.fromJson(json).copyWith(themeMode: ThemeMode.light);
     } catch (_) {
       return defaultThemeProps;
     }
