@@ -25,36 +25,41 @@ class XrayConfigBuilder {
     final logLevel     = s['log_level']     ?? 'error';
     final routingMode  = s['routing_mode']  ?? 'global';
 
+    final bool useFakeDns = routingMode != 'direct';
+
     final routingRules = <Map<String, dynamic>>[];
-    if (bypassLan || routingMode == 'rules') {
-      routingRules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
-    }
-    if (routingMode == 'rules') {
-      // Mạng xã hội & video: luôn qua proxy, kể cả khi CDN có IP VN.
-      // Đặt trước geoip:vn để không bị bypass nhầm.
-      routingRules.add({'type': 'field', 'domain': [
-        'domain:youtube.com',    'domain:googlevideo.com', 'domain:ytimg.com',
-        'domain:facebook.com',   'domain:fbcdn.net',       'domain:fb.com',
-        'domain:instagram.com',  'domain:cdninstagram.com',
-        'domain:tiktok.com',     'domain:tiktokcdn.com',   'domain:tiktokv.com',
-        'domain:ttwstatic.com',  'domain:musical.ly',
-        'domain:twitter.com',    'domain:twimg.com',       'domain:x.com',
-        'domain:telegram.org',   'domain:t.me',
-      ], 'outboundTag': 'proxy'});
-      routingRules.add({'type': 'field', 'ip': ['geoip:vn'], 'outboundTag': 'direct'});
-      routingRules.add({'type': 'field', 'domain': ['geosite:vn'], 'outboundTag': 'direct'});
+    if (routingMode == 'direct') {
+      // Trực tiếp: mọi lưu lượng bypass proxy, không qua VPN server
+      routingRules.add({'type': 'field', 'network': 'tcp,udp', 'outboundTag': 'direct'});
+    } else {
+      if (bypassLan || routingMode == 'rules') {
+        routingRules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
+      }
+      if (routingMode == 'rules') {
+        // Mạng xã hội & video: luôn qua proxy, kể cả khi CDN có IP VN.
+        // Đặt trước geoip:vn để không bị bypass nhầm.
+        routingRules.add({'type': 'field', 'domain': [
+          'domain:youtube.com',    'domain:googlevideo.com', 'domain:ytimg.com',
+          'domain:facebook.com',   'domain:fbcdn.net',       'domain:fb.com',
+          'domain:instagram.com',  'domain:cdninstagram.com',
+          'domain:tiktok.com',     'domain:tiktokcdn.com',   'domain:tiktokv.com',
+          'domain:ttwstatic.com',  'domain:musical.ly',
+          'domain:twitter.com',    'domain:twimg.com',       'domain:x.com',
+          'domain:telegram.org',   'domain:t.me',
+        ], 'outboundTag': 'proxy'});
+        routingRules.add({'type': 'field', 'ip': ['geoip:vn'], 'outboundTag': 'direct'});
+        routingRules.add({'type': 'field', 'domain': ['geosite:vn'], 'outboundTag': 'direct'});
+      }
     }
 
     return {
       'log': {'loglevel': logLevel == 'none' ? 'none' : logLevel},
-      // FakeDNS: trả fake IP ngay lập tức (không cần round-trip DNS qua tunnel)
-      // Tương đương fake-ip mode của Clash Meta — loại bỏ độ trễ DNS khi thiết lập kết nối
-      'fakedns': [
+      // FakeDNS chỉ khi không phải Trực tiếp (direct mode dùng DNS thật)
+      if (useFakeDns) 'fakedns': [
         {'ipPool': '198.18.0.0/15', 'poolSize': 65535},
       ],
       'dns': {
         // Hardcode IP của DoH servers → tránh circular DNS khi giải địa chỉ DoH server
-        // Tương đương default-nameserver / nameserver-policy của ShadowClash
         'hosts': {
           'cloudflare-dns.com': '1.1.1.1',
           'dns.cloudflare.com': '1.1.1.1',
@@ -62,13 +67,9 @@ class XrayConfigBuilder {
           'dns.google.com': '8.8.8.8',
           'one.one.one.one': '1.1.1.1',
         },
-        'servers': [
-          'fakedns',           // Ưu tiên fake DNS — phản hồi tức thì
-          'https+local://cloudflare-dns.com/dns-query', // DoH fallback (giải ngoài tunnel)
-          dns1,
-          dns2,
-          'localhost',
-        ],
+        'servers': useFakeDns
+            ? ['fakedns', 'https+local://cloudflare-dns.com/dns-query', dns1, dns2, 'localhost']
+            : [dns1, dns2, 'localhost'],
         'queryStrategy': ipv6 ? 'UseIP' : 'UseIPv4',
       },
       'inbounds': [
@@ -80,8 +81,10 @@ class XrayConfigBuilder {
           'settings': {'auth': 'noauth', 'udp': udp, 'userLevel': 8},
           'sniffing': {
             'enabled': sniffing,
-            'destOverride': ['http', 'tls', 'quic', 'fakedns'],
-            'metadataOnly': false, // Cần đọc payload để nhận diện FakeDNS
+            'destOverride': useFakeDns
+                ? ['http', 'tls', 'quic', 'fakedns']
+                : ['http', 'tls', 'quic'],
+            'metadataOnly': false,
           },
         },
         {
@@ -109,7 +112,7 @@ class XrayConfigBuilder {
       },
       'stats': {},
       'routing': {
-        'domainStrategy': routingMode == 'global' ? 'AsIs' : 'IPIfNonMatch',
+        'domainStrategy': (routingMode == 'global' || routingMode == 'direct') ? 'AsIs' : 'IPIfNonMatch',
         'rules': routingRules,
       },
       'transport': {},

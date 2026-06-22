@@ -41,6 +41,17 @@ class VpnProvider extends ChangeNotifier {
   String? get error => _error;
   bool get autoSelect => _autoSelect;
   DateTime? get lastUpdated => _lastUpdated;
+  String get routingMode => _settings['routing_mode'] ?? 'global';
+
+  Future<void> setRoutingMode(String mode) async {
+    if (_settings['routing_mode'] == mode) return;
+    _settings['routing_mode'] = mode;
+    await StorageService.saveSettings(_settings);
+    notifyListeners();
+    if (_state == VpnState.connected || _state == VpnState.connecting) {
+      _fastSwitch();
+    }
+  }
 
   String get totalSpeedStr {
     if (_status == null) return '';
