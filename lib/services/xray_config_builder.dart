@@ -30,6 +30,17 @@ class XrayConfigBuilder {
       routingRules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
     }
     if (routingMode == 'rules') {
+      // Mạng xã hội & video: luôn qua proxy, kể cả khi CDN có IP VN.
+      // Đặt trước geoip:vn để không bị bypass nhầm.
+      routingRules.add({'type': 'field', 'domain': [
+        'domain:youtube.com',    'domain:googlevideo.com', 'domain:ytimg.com',
+        'domain:facebook.com',   'domain:fbcdn.net',       'domain:fb.com',
+        'domain:instagram.com',  'domain:cdninstagram.com',
+        'domain:tiktok.com',     'domain:tiktokcdn.com',   'domain:tiktokv.com',
+        'domain:ttwstatic.com',  'domain:musical.ly',
+        'domain:twitter.com',    'domain:twimg.com',       'domain:x.com',
+        'domain:telegram.org',   'domain:t.me',
+      ], 'outboundTag': 'proxy'});
       routingRules.add({'type': 'field', 'ip': ['geoip:vn'], 'outboundTag': 'direct'});
       routingRules.add({'type': 'field', 'domain': ['geosite:vn'], 'outboundTag': 'direct'});
     }

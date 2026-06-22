@@ -245,11 +245,19 @@ class VpnProvider extends ChangeNotifier {
     notifyListeners();
     try {
       await _v2ray.stopV2Ray();
-      await connect(); // _selected đã set sẵn → không re-ping, start luôn
-    } finally {
-      // Reset sau connect() để onStatusChanged muộn không trigger auto-reconnect
-      Future.delayed(const Duration(milliseconds: 200), () => _userDisconnecting = false);
-    }
+    } catch (_) {}
+    await connect();
+    // Giữ flag 3s cho đến khi VPN kịp chuyển sang CONNECTED.
+    // Bug cũ: 200ms quá ngắn → nếu VPN fail trong cửa sổ đó thì
+    // onStatusChanged thấy _userDisconnecting=true → bỏ qua reconnect → stuck.
+    // Sau 3s nếu vẫn ngắt (connect() thất bại hoặc timeout) → thử lại ngay.
+    Future.delayed(const Duration(seconds: 3), () {
+      _userDisconnecting = false;
+      if (_state == VpnState.disconnected) {
+        _reconnectAttempts = 0;
+        connect(); // auto: re-ping chọn server; manual: thử lại cùng server
+      }
+    });
   }
 
   // ── VPN control ──────────────────────────────────────────────────────────
