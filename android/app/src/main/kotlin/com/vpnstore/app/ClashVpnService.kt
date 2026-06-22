@@ -9,6 +9,8 @@ import androidx.core.app.NotificationCompat
 import com.follow.clash.core.Core
 import com.follow.clash.core.TunInterface
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 class ClashVpnService : VpnService() {
 
@@ -27,12 +29,12 @@ class ClashVpnService : VpnService() {
         const val EXTRA_CONFIG   = "config"
         const val EXTRA_HOME_DIR = "homeDir"
 
+        // In-process fallback (used only when not running as a separate process)
         @Volatile var isRunning = false
             private set
-        @Volatile var uploadSpeed:   Long = 0
-        @Volatile var downloadSpeed: Long = 0
-        @Volatile var totalUpload:   Long = 0
-        @Volatile var totalDownload: Long = 0
+
+        // Prevent concurrent startClash calls (e.g. if connect() fires rapidly)
+        @Volatile private var isStarting = false
     }
 
     private var trafficHandler: Handler? = null
@@ -41,8 +43,12 @@ class ClashVpnService : VpnService() {
             try {
                 val t  = Core.getTraffic()
                 val tt = Core.getTotalTraffic()
-                if (t.size >= 2)  { uploadSpeed = t[0];   downloadSpeed = t[1] }
-                if (tt.size >= 2) { totalUpload = tt[0];  totalDownload = tt[1] }
+                val up   = if (t.size  >= 2) t[0]  else 0L
+                val down = if (t.size  >= 2) t[1]  else 0L
+                val tUp  = if (tt.size >= 2) tt[0] else 0L
+                val tDn  = if (tt.size >= 2) tt[1] else 0L
+                // Write state to file so MainActivity (possibly in another process) can read it
+                writeStateFile(running = true, up = up, down = down, totalUp = tUp, totalDown = tDn)
             } catch (_: Throwable) {}
             trafficHandler?.postDelayed(this, 1000)
         }
@@ -58,22 +64,33 @@ class ClashVpnService : VpnService() {
             ACTION_START -> {
                 val config  = intent.getStringExtra(EXTRA_CONFIG)  ?: return START_NOT_STICKY
                 val homeDir = intent.getStringExtra(EXTRA_HOME_DIR) ?: filesDir.absolutePath
-                // Must call startForeground() BEFORE heavy work — Android kills the service
-                // if startForeground() isn't called within 5 seconds of startForegroundService()
+
+                // Prevent overlapping start calls (e.g. rapid connect() invocations)
+                if (isStarting) {
+                    android.util.Log.w("ClashVPN", "Already starting, ignoring duplicate start")
+                    return START_NOT_STICKY
+                }
+                isStarting = true
+
                 try {
                     startForegroundCompat()
                 } catch (e: Throwable) {
                     android.util.Log.e("ClashVPN", "startForeground failed: ${e.message}")
+                    isStarting = false
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                // Run heavy Clash init on a background thread to avoid blocking the main thread
+
                 Thread {
-                    if (!startClash(homeDir, config)) {
-                        Handler(Looper.getMainLooper()).post {
-                            stopForegroundCompat()
-                            stopSelf()
+                    try {
+                        if (!startClash(homeDir, config)) {
+                            Handler(Looper.getMainLooper()).post {
+                                stopForegroundCompat()
+                                stopSelf()
+                            }
                         }
+                    } finally {
+                        isStarting = false
                     }
                 }.start()
             }
@@ -93,7 +110,6 @@ class ClashVpnService : VpnService() {
             )
         }
         val notification = buildNotification()
-        // API 34+ requires the 3-argument form with a declared foreground service type
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
@@ -111,18 +127,12 @@ class ClashVpnService : VpnService() {
     }
 
     private fun startClash(homeDir: String, yamlConfig: String): Boolean {
-        // Tear down any previous session — but do NOT touch foreground state here,
-        // since we just called startForeground() above.
         isRunning = false
         trafficHandler?.removeCallbacks(trafficRunnable)
-        // catch Throwable, not Exception — UnsatisfiedLinkError (from System.loadLibrary)
-        // is an Error subclass and would NOT be caught by catch(Exception)
         try { Core.stopTun() } catch (_: Throwable) {}
         tunFd?.close()
         tunFd = null
-        uploadSpeed = 0; downloadSpeed = 0
 
-        // Write YAML config to homeDir/config.yaml
         val dir = File(homeDir).also { it.mkdirs() }
         try {
             File(dir, "config.yaml").writeText(yamlConfig)
@@ -131,17 +141,14 @@ class ClashVpnService : VpnService() {
             return false
         }
 
-        // Create TUN interface — the whole block needs try-catch because:
-        // - addRoute("::", 0) throws on devices that don't support IPv6 VPN routing
-        // - setMtu() / establish() can throw on certain OEM implementations
         val tun = try {
             Builder().apply {
-                setMtu(1500)  // 9000 (jumbo) is rejected by many Xiaomi/MIUI builds
+                setMtu(1500)
                 addAddress("198.18.0.1", 30)
                 addDnsServer("1.1.1.1")
                 addDnsServer("8.8.8.8")
                 addRoute("0.0.0.0", 0)
-                try { addRoute("::", 0) } catch (_: Throwable) {}  // IPv6 is optional
+                try { addRoute("::", 0) } catch (_: Throwable) {}
                 setSession("VPN Store")
                 try { addDisallowedApplication(packageName) } catch (_: Throwable) {}
             }.establish()
@@ -152,9 +159,6 @@ class ClashVpnService : VpnService() {
 
         tunFd = tun
 
-        // Initialize Clash engine — reads config.yaml from homeDir.
-        // System.loadLibrary throws UnsatisfiedLinkError (an Error, not Exception)
-        // if the .so can't be loaded, so we must catch Throwable here.
         try {
             val result = Core.quickSetup(homeDir)
             if (result.isNotEmpty() && result != "success") {
@@ -164,16 +168,20 @@ class ClashVpnService : VpnService() {
                 return false
             }
         } catch (e: Throwable) {
-            android.util.Log.e("ClashVPN", "quickSetup failed: ${e.message}")
+            android.util.Log.e("ClashVPN", "quickSetup exception: ${e.message}")
             tun.close()
             tunFd = null
             return false
         }
 
-        // Protect the TUN fd itself so traffic from Clash doesn't loop back through the VPN
+        // Wait for the Clash external controller to be ready — this ensures quickSetup
+        // has fully initialized all internal state before we hand over the TUN fd.
+        // Without this wait, startTUN can race with goroutines started by quickSetup
+        // and cause nil-pointer panics inside the Go runtime.
+        waitForClashReady(maxMs = 5000)
+
         protect(tun.fd)
 
-        // Hand the TUN fd to Clash
         try {
             Core.startTun(tun.fd, tunBridge)
         } catch (e: Throwable) {
@@ -185,8 +193,26 @@ class ClashVpnService : VpnService() {
         }
 
         isRunning = true
+        writeStateFile(running = true)
         trafficHandler?.post(trafficRunnable)
         return true
+    }
+
+    /** Poll 127.0.0.1:9091/version until Clash's REST API responds (= fully started). */
+    private fun waitForClashReady(maxMs: Long) {
+        val deadline = System.currentTimeMillis() + maxMs
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                val conn = URL("http://127.0.0.1:9091/version").openConnection() as HttpURLConnection
+                conn.connectTimeout = 400
+                conn.readTimeout    = 400
+                val code = conn.responseCode
+                conn.disconnect()
+                if (code in 200..299) return  // Clash is ready
+            } catch (_: Throwable) {}
+            try { Thread.sleep(200) } catch (_: InterruptedException) { return }
+        }
+        android.util.Log.w("ClashVPN", "Clash REST API not ready after ${maxMs}ms — proceeding anyway")
     }
 
     private fun stopClash() {
@@ -195,8 +221,28 @@ class ClashVpnService : VpnService() {
         try { Core.stopTun() } catch (_: Throwable) {}
         tunFd?.close()
         tunFd = null
-        uploadSpeed = 0; downloadSpeed = 0
+        writeStateFile(running = false)
         stopForegroundCompat()
+    }
+
+    // ── File-based IPC so MainActivity can read state even across process boundary ──
+
+    private fun stateFile() = File(filesDir, "vpn_state.json")
+
+    private fun writeStateFile(
+        running: Boolean,
+        up: Long = 0, down: Long = 0,
+        totalUp: Long = 0, totalDown: Long = 0,
+    ) {
+        try {
+            if (running) {
+                stateFile().writeText(
+                    """{"running":true,"up":$up,"down":$down,"totalUp":$totalUp,"totalDown":$totalDown}"""
+                )
+            } else {
+                stateFile().writeText("""{"running":false,"up":0,"down":0,"totalUp":0,"totalDown":0}""")
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun buildNotification(): Notification {

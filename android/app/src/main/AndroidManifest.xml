@@ -34,10 +34,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Clash Meta VPN service -->
+        <!-- Clash Meta VPN service — runs in a separate OS process (:clash) so that
+             a native crash in the Go engine (libclash.so) kills only this process
+             and does NOT close the Flutter UI. State is shared via vpn_state.json. -->
         <service
             android:name=".ClashVpnService"
             android:exported="false"
+            android:process=":clash"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>

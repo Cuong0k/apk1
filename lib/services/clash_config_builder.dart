@@ -14,6 +14,14 @@ class ClashConfigBuilder {
     final dns2 = settings['dns_secondary'] ?? '8.8.8.8';
     final allowInsecure = settings['allow_insecure'] == true;
 
+    // Deduplicate server names — Clash Meta panics on duplicate proxy names
+    final seen = <String>{};
+    final uniqueServers = servers.where((s) {
+      if (seen.contains(s.name)) return false;
+      seen.add(s.name);
+      return true;
+    }).toList();
+
     final buf = StringBuffer();
 
     // ── Global ────────────────────────────────────────────────────────────
@@ -44,24 +52,29 @@ class ClashConfigBuilder {
 
     // ── Proxies ───────────────────────────────────────────────────────────
     buf.writeln('proxies:');
-    for (final s in servers) {
+    for (final s in uniqueServers) {
       final entry = _proxyEntry(s, allowInsecure);
       if (entry != null) buf.write(entry);
     }
     buf.writeln('');
 
     // ── Proxy groups ──────────────────────────────────────────────────────
-    final names = servers
+    final names = uniqueServers
         .where((s) => _supportsProtocol(s.protocol))
         .map((s) => _q(s.name))
         .join(', ');
+
+    // Clash Meta panics if url-test / fallback groups have an empty proxies list.
+    // When there are no supported servers, use DIRECT as the only member so the
+    // groups are always valid (they'll just pass traffic through directly).
+    final safeNames = names.isEmpty ? '"DIRECT"' : names;
 
     buf.writeln('proxy-groups:');
 
     // URL-test (auto-select — Clash picks lowest latency)
     buf.writeln('  - name: "Auto"');
     buf.writeln('    type: url-test');
-    buf.writeln('    proxies: [$names]');
+    buf.writeln('    proxies: [$safeNames]');
     buf.writeln('    url: "http://cp.cloudflare.com/generate_204"');
     buf.writeln('    interval: 300');
     buf.writeln('    tolerance: 50');
@@ -70,7 +83,7 @@ class ClashConfigBuilder {
     // Fallback
     buf.writeln('  - name: "Fallback"');
     buf.writeln('    type: fallback');
-    buf.writeln('    proxies: [$names]');
+    buf.writeln('    proxies: [$safeNames]');
     buf.writeln('    url: "http://cp.cloudflare.com/generate_204"');
     buf.writeln('    interval: 120');
     buf.writeln('');
@@ -78,13 +91,15 @@ class ClashConfigBuilder {
     // Manual select
     buf.writeln('  - name: "Manual"');
     buf.writeln('    type: select');
-    buf.writeln('    proxies: [$names]');
+    buf.writeln('    proxies: [$safeNames]');
     buf.writeln('');
 
     // Top-level PROXY group — Flutter switches between Auto / Fallback / Manual / individual
+    final proxyList = names.isEmpty ? '"Auto", "Fallback", "Manual", "DIRECT"'
+        : '"Auto", "Fallback", "Manual", $names, "DIRECT"';
     buf.writeln('  - name: "PROXY"');
     buf.writeln('    type: select');
-    buf.writeln('    proxies: ["Auto", "Fallback", "Manual", $names, "DIRECT"]');
+    buf.writeln('    proxies: [$proxyList]');
     buf.writeln('');
 
     // ── Rules ─────────────────────────────────────────────────────────────

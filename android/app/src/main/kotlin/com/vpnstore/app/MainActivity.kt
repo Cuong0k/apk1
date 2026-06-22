@@ -10,6 +10,7 @@ import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONObject
 import java.io.File
 
 class MainActivity : FlutterActivity() {
@@ -20,7 +21,6 @@ class MainActivity : FlutterActivity() {
     private var vpnChannel: MethodChannel? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
-    // Pending VPN permission request
     private var vpnPermResult: MethodChannel.Result? = null
     private val VPN_PERM_REQ = 1001
 
@@ -31,7 +31,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // ── APK update channel ────────────────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATE_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -44,11 +43,9 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        // ── VPN platform events (tile toggle, network change) ─────────────
         vpnChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, VPN_CHANNEL)
         setupNetworkCallback()
 
-        // ── Clash engine channel ──────────────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CLASH_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -63,10 +60,10 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "start" -> {
-                        val config  = call.argument<String>("config")  ?: return@setMethodCallHandler result.error("NO_CONFIG", "config required", null)
+                        val config  = call.argument<String>("config")
+                            ?: return@setMethodCallHandler result.error("NO_CONFIG", "config required", null)
                         val homeDir = call.argument<String>("homeDir") ?: filesDir.absolutePath
 
-                        // Permission check before starting
                         if (VpnService.prepare(this) != null) {
                             result.error("NO_PERM", "VPN permission not granted", null)
                             return@setMethodCallHandler
@@ -93,14 +90,20 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
-                    "isRunning" -> result.success(ClashVpnService.isRunning)
+                    "isRunning" -> {
+                        // Read from file so it works even when service runs in a separate process
+                        result.success(readVpnState().running)
+                    }
 
-                    "getTraffic" -> result.success(mapOf(
-                        "up"         to ClashVpnService.uploadSpeed,
-                        "down"       to ClashVpnService.downloadSpeed,
-                        "totalUp"    to ClashVpnService.totalUpload,
-                        "totalDown"  to ClashVpnService.totalDownload,
-                    ))
+                    "getTraffic" -> {
+                        val state = readVpnState()
+                        result.success(mapOf(
+                            "up"        to state.up,
+                            "down"      to state.down,
+                            "totalUp"   to state.totalUp,
+                            "totalDown" to state.totalDown,
+                        ))
+                    }
 
                     "getFilesDir" -> result.success(filesDir.absolutePath)
 
@@ -108,6 +111,33 @@ class MainActivity : FlutterActivity() {
                 }
             }
     }
+
+    // ── VPN state file (written by ClashVpnService, read here) ───────────────
+
+    private data class VpnState(
+        val running: Boolean = false,
+        val up: Long = 0, val down: Long = 0,
+        val totalUp: Long = 0, val totalDown: Long = 0,
+    )
+
+    private fun readVpnState(): VpnState {
+        return try {
+            val text = File(filesDir, "vpn_state.json").readText()
+            val j = JSONObject(text)
+            VpnState(
+                running   = j.optBoolean("running", false),
+                up        = j.optLong("up",        0),
+                down      = j.optLong("down",      0),
+                totalUp   = j.optLong("totalUp",   0),
+                totalDown = j.optLong("totalDown", 0),
+            )
+        } catch (_: Throwable) {
+            // File doesn't exist or is malformed — service is not running
+            VpnState()
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -147,9 +177,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
             cm.registerNetworkCallback(req, networkCallback!!)
-        } catch (_: Exception) {
-            // Network callback not critical — VPN status polling handles state changes
-        }
+        } catch (_: Exception) {}
     }
 
     private fun installApk(filePath: String) {
