@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:fl_clash/auth/auth_storage.dart';
-import 'package:fl_clash/auth/login_page.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/core/core.dart';
 import 'package:fl_clash/l10n/l10n.dart';
@@ -28,8 +26,6 @@ class Application extends ConsumerStatefulWidget {
 class ApplicationState extends ConsumerState<Application> {
   Timer? _autoUpdateProfilesTaskTimer;
   bool _preHasVpn = false;
-  bool _isAuthenticated = false;
-  bool _authChecked = false;
 
   final _pageTransitionsTheme = const PageTransitionsTheme(
     builders: <TargetPlatform, PageTransitionsBuilder>{
@@ -50,7 +46,6 @@ class ApplicationState extends ConsumerState<Application> {
   @override
   void initState() {
     super.initState();
-    _checkAuth();
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       if (globalState.navigatorKey.currentContext != null) {
         await globalState.attach();
@@ -61,20 +56,6 @@ class ApplicationState extends ConsumerState<Application> {
       _initLink();
       app?.initShortcuts();
     });
-  }
-
-  Future<void> _checkAuth() async {
-    final authenticated = await AuthStorage.isAuthenticated();
-    if (mounted) {
-      setState(() {
-        _isAuthenticated = authenticated;
-        _authChecked = true;
-      });
-    }
-  }
-
-  void _onLoginSuccess() {
-    setState(() => _isAuthenticated = true);
   }
 
   void _initLink() {
@@ -196,11 +177,7 @@ class ApplicationState extends ConsumerState<Application> {
               primaryColor: themeProps.primaryColor,
             ).toPureBlack(themeProps.pureBlack),
           ),
-          home: !_authChecked
-              ? const SizedBox.shrink()
-              : (_isAuthenticated
-                  ? child!
-                  : LoginPage(onLoginSuccess: _onLoginSuccess)),
+          home: child!,
         );
       },
       child: const HomePage(),
