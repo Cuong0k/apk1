@@ -16,22 +16,14 @@ class Navigation {
         icon: const Icon(Icons.space_dashboard),
         label: PageLabel.dashboard,
         builder: (_) =>
-            const DashboardView(key: GlobalObjectKey(PageLabel.dashboard)),
-      ),
-      NavigationItem(
-        icon: const Icon(Icons.article),
-        label: PageLabel.proxies,
-        builder: (_) =>
-            const ProxiesView(key: GlobalObjectKey(PageLabel.proxies)),
-        modes: hasProxies
-            ? [NavigationItemMode.mobile, NavigationItemMode.desktop]
-            : [],
+            const ProxiesView(key: GlobalObjectKey(PageLabel.dashboard)),
       ),
       NavigationItem(
         icon: const Icon(Icons.folder),
         label: PageLabel.profiles,
         builder: (_) =>
             const ProfilesView(key: GlobalObjectKey(PageLabel.profiles)),
+        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
       ),
       NavigationItem(
         icon: const Icon(Icons.view_timeline),

@@ -52,7 +52,7 @@ class CommonService : Service(), IBaseService,
     override fun start() {
         try {
             loader.load()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             stop()
         }
     }

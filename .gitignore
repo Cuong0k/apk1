@@ -59,6 +59,7 @@ docs/
 /android/core/**/includes/
 /android/core/**/cmake-build-*/
 /android/core/**/jniLibs/
+!/android/core/src/main/jniLibs/arm64-v8a/libcore.so
 
 #FlClash
 /libclash/

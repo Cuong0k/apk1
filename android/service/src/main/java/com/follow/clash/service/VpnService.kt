@@ -239,7 +239,7 @@ class VpnService : SystemVpnService(), IBaseService,
             State.options?.let {
                 handleStart(it)
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             stop()
         }
     }
