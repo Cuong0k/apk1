@@ -33,7 +33,7 @@ jobs:
           flutter-version: 3.41.9
           cache: true
 
-      - name: Get libclash.so (FlClash release → fallback source build)
+      - name: Build libclash.so from mihomo Alpha (reality/xhttp/grpc/ws support)
         run: |
           set -e
           git config --global url."https://github.com/".insteadOf "git@github.com:"
@@ -42,62 +42,27 @@ jobs:
           JNILIBS_APP=android/app/src/main/jniLibs/arm64-v8a
           mkdir -p "$JNILIBS_CORE" "$JNILIBS_APP"
 
-          # ── Try pre-built libclash.so from FlClash official release ────────
-          echo "=== Fetching FlClash latest release ==="
-          RELEASE_JSON=$(curl -sf "https://api.github.com/repos/chen08209/FlClash/releases/latest" || true)
+          # Always build from mihomo's latest Alpha branch HEAD so newer VLESS
+          # transports (reality, xhttp) are present — pinned FlClash submodule
+          # commits and pre-built release binaries can lag behind upstream.
+          echo "=== Building libclash.so from mihomo Alpha (latest) ==="
+          git clone --depth=1 --branch Alpha https://github.com/metacubex/mihomo.git /tmp/mihomo
+          rm -rf ./core/Clash.Meta
+          cp -r /tmp/mihomo ./core/Clash.Meta
 
-          if [ -n "$RELEASE_JSON" ]; then
-            APK_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' \
-              | grep -i 'android' | grep -i 'arm64' | grep -v 'universal' \
-              | head -1 | cut -d'"' -f4)
-            [ -z "$APK_URL" ] && APK_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' \
-              | grep -i 'android' | head -1 | cut -d'"' -f4)
-          fi
+          NDK_CC=$(which aarch64-linux-android21-clang 2>/dev/null || \
+                   find /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android21-clang" 2>/dev/null | head -1 || \
+                   find /opt -name "aarch64-linux-android*-clang" 2>/dev/null | head -1)
+          test -n "$NDK_CC" || (echo "NDK clang not found!" && exit 1)
 
-          if [ -n "$APK_URL" ]; then
-            echo "Downloading: $APK_URL"
-            if curl -sfL -o /tmp/flclash.apk "$APK_URL"; then
-              mkdir -p /tmp/flclash_apk
-              if unzip -o /tmp/flclash.apk "lib/arm64-v8a/libclash.so" -d /tmp/flclash_apk 2>/dev/null; then
-                SO=/tmp/flclash_apk/lib/arm64-v8a/libclash.so
-                if [ -f "$SO" ] && [ "$(stat -c%s "$SO")" -gt 1000000 ]; then
-                  echo "✓ Got libclash.so from FlClash release ($(stat -c%s "$SO") bytes)"
-                  cp "$SO" "$JNILIBS_CORE/libclash.so"
-                  cp "$SO" "$JNILIBS_APP/libclash.so"
-                  echo "LIBCLASH_SOURCE=release" >> "$GITHUB_ENV"
-                fi
-              fi
-            fi
-          fi
-
-          # ── Fallback: build from source ─────────────────────────────────
-          if [ "${LIBCLASH_SOURCE:-}" != "release" ]; then
-            echo "=== Building libclash.so from source ==="
-            git clone --depth=1 https://github.com/chen08209/FlClash.git /tmp/flclash
-            cd /tmp/flclash
-            if git submodule update --init --depth=1 core/Clash.Meta 2>&1; then
-              CLASH_META_SRC="/tmp/flclash/core/Clash.Meta"
-            else
-              git clone --depth=1 --branch Alpha \
-                https://github.com/metacubex/mihomo.git /tmp/mihomo
-              CLASH_META_SRC="/tmp/mihomo"
-            fi
-            cd -
-            cp -r "$CLASH_META_SRC" ./core/Clash.Meta
-
-            NDK_CC=$(which aarch64-linux-android21-clang 2>/dev/null || \
-                     find /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android21-clang" 2>/dev/null | head -1 || \
-                     find /opt -name "aarch64-linux-android*-clang" 2>/dev/null | head -1)
-            test -n "$NDK_CC" || (echo "NDK clang not found!" && exit 1)
-
-            cd core
-            GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="$NDK_CC" CFLAGS="-O3" \
-              go build -ldflags="-w -s" -tags="with_gvisor" -buildmode=c-shared -o libclash.so .
-            cd -
-            cp core/libclash.so "$JNILIBS_CORE/libclash.so"
-            cp core/libclash.so "$JNILIBS_APP/libclash.so"
-            echo "✓ Built libclash.so from source"
-          fi
+          cd core
+          go mod tidy
+          GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="$NDK_CC" CFLAGS="-O3" \
+            go build -ldflags="-w -s" -tags="with_gvisor" -buildmode=c-shared -o libclash.so .
+          cd -
+          cp core/libclash.so "$JNILIBS_CORE/libclash.so"
+          cp core/libclash.so "$JNILIBS_APP/libclash.so"
+          echo "✓ Built libclash.so from mihomo Alpha"
 
           ls -lh "$JNILIBS_APP/libclash.so"
 
