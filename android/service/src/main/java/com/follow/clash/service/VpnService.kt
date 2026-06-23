@@ -239,7 +239,8 @@ class VpnService : SystemVpnService(), IBaseService,
             State.options?.let {
                 handleStart(it)
             }
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            android.util.Log.e("VpnService", "start failed: ${e::class.simpleName}: ${e.message}", e)
             stop()
         }
     }
