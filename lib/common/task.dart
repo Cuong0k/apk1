@@ -183,29 +183,6 @@ Future<VM2<String, String>> _makeRealProfileTask(
     }
   }
   rawConfig['profile']['store-selected'] = false;
-  // libclash.so crashes on VLESS connections — keep VLESS in the UI list
-  // but remove from config so the Go core never tries to use it
-  if (rawConfig['proxies'] is List) {
-    final proxies = rawConfig['proxies'] as List;
-    final vlessNames = proxies
-        .where((p) => p is Map && (p['type'] as String?)?.toLowerCase() == 'vless')
-        .map((p) => (p as Map)['name'] as String)
-        .toSet();
-    if (vlessNames.isNotEmpty) {
-      rawConfig['proxies'] = proxies
-          .where((p) => !(p is Map && (p['type'] as String?)?.toLowerCase() == 'vless'))
-          .toList();
-      if (rawConfig['proxy-groups'] is List) {
-        for (final group in rawConfig['proxy-groups'] as List) {
-          if (group is Map && group['proxies'] is List) {
-            group['proxies'] = (group['proxies'] as List)
-                .where((name) => !vlessNames.contains(name))
-                .toList();
-          }
-        }
-      }
-    }
-  }
   rawConfig['geox-url'] = realPatchConfig.geoXUrl.toJson();
   rawConfig['global-ua'] = realPatchConfig.globalUa ?? defaultUA;
   if (rawConfig['hosts'] == null) {
