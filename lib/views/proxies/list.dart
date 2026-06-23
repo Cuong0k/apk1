@@ -155,16 +155,13 @@ class _ProxiesListViewState extends State<ProxiesListView> {
         final proxies = group.all;
         for (final proxy in proxies) {
           items.add(
-            SizedBox(
-              height: 52,
-              child: ProxyCard(
-                testUrl: group.testUrl,
-                type: cardType,
-                groupType: group.type,
-                key: ValueKey('$groupName.${proxy.name}'),
-                proxy: proxy,
-                groupName: groupName,
-              ),
+            ProxyCard(
+              testUrl: group.testUrl,
+              type: cardType,
+              groupType: group.type,
+              key: ValueKey('$groupName.${proxy.name}'),
+              proxy: proxy,
+              groupName: groupName,
             ),
           );
         }
