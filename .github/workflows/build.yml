@@ -20,6 +20,12 @@ jobs:
           add-to-path: true
           link-to-sdk: true
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: false
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -27,20 +33,42 @@ jobs:
           flutter-version: 3.41.9
           cache: true
 
-      - name: Download pre-built libclash.so
+      - name: Build libclash.so from source
         run: |
-          # Download to app jniLibs — plugin.gradle checks this path to skip the Go build
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          curl -L -o android/app/src/main/jniLibs/arm64-v8a/libclash.so \
-            https://github.com/Cuong0k/apk1/releases/download/native-libs-v1/libclash.so
+          set -e
 
-          # Copy to core jniLibs so CMake can find and link against it
-          mkdir -p android/core/src/main/jniLibs/arm64-v8a
-          cp android/app/src/main/jniLibs/arm64-v8a/libclash.so \
-             android/core/src/main/jniLibs/arm64-v8a/libclash.so
+          # Clone FlClash with Clash.Meta submodule (mihomo fork with full protocol support)
+          git clone --depth=1 --recurse-submodules \
+            https://github.com/chen08209/FlClash.git /tmp/flclash
 
-          ls -lh android/app/src/main/jniLibs/arm64-v8a/
-          ls -lh android/core/src/main/jniLibs/arm64-v8a/
+          # Use their Clash.Meta submodule with our core Go files
+          cp -r /tmp/flclash/core/Clash.Meta ./core/Clash.Meta
+
+          # Find NDK arm64 clang from PATH (added by nttld/setup-ndk)
+          NDK_CC=$(which aarch64-linux-android21-clang 2>/dev/null || \
+                   ls /usr/local/lib/android/sdk/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang 2>/dev/null | head -1 || \
+                   find / -name "aarch64-linux-android*-clang" -path "*/prebuilt/*" 2>/dev/null | head -1)
+          echo "Using NDK CC: $NDK_CC"
+
+          # Build libclash.so for arm64-v8a
+          cd core
+          GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="$NDK_CC" \
+            CFLAGS="-O3 -Werror" \
+            go build \
+              -ldflags="-w -s" \
+              -tags="with_gvisor" \
+              -buildmode=c-shared \
+              -o libclash.so \
+              .
+
+          # Place in both locations CMake expects
+          mkdir -p ../android/core/src/main/jniLibs/arm64-v8a
+          mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
+          cp libclash.so ../android/core/src/main/jniLibs/arm64-v8a/libclash.so
+          cp libclash.so ../android/app/src/main/jniLibs/arm64-v8a/libclash.so
+
+          ls -lh ../android/core/src/main/jniLibs/arm64-v8a/
+          ls -lh ../android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Get Flutter dependencies
         run: flutter pub get

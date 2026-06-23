@@ -29,10 +29,6 @@ class ProxyCard extends StatelessWidget {
   }
 
   Future<void> _changeProxy(WidgetRef ref) async {
-    if (proxy.type.toLowerCase() == 'vless') {
-      globalState.showNotifier('VLESS chưa được hỗ trợ trên thiết bị này');
-      return;
-    }
     final isComputedSelected = groupType.isComputedSelected;
     final isSelector = groupType == GroupType.Selector;
     final container = globalState.container;
