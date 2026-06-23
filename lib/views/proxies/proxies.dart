@@ -365,19 +365,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
         });
       }
     }, fireImmediately: true);
-    ref.listenManual(
-      proxiesStyleSettingProvider.select(
-        (state) => state.type == ProxiesType.tab,
-      ),
-      (prev, next) {
-        if (prev != next) {
-          setState(() {
-            _isTab = next;
-          });
-        }
-      },
-      fireImmediately: true,
-    );
+    // Always list view — _isTab stays false
     ref.listenManual(
       currentPageLabelProvider.select((state) => state == PageLabel.proxies),
       (prev, next) {
@@ -390,9 +378,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
 
   @override
   Widget build(BuildContext context) {
-    final proxiesType = ref.watch(
-      proxiesStyleSettingProvider.select((state) => state.type),
-    );
+    const proxiesType = ProxiesType.list;
     final isLoading = ref.watch(loadingProvider(LoadingTag.proxies));
     return CommonScaffold(
       key: _scaffoldKey,

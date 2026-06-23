@@ -210,6 +210,11 @@ Future<VM2<String, String>> _makeRealProfileTask(
           entry.value.splitByMultipleSeparators;
     }
   }
+  // Force fake-ip so subscription DNS modes (redir-host/normal) don't crash Go core
+  if (rawConfig['dns']['enhanced-mode'] != 'fake-ip') {
+    rawConfig['dns']['enhanced-mode'] = 'fake-ip';
+    rawConfig['dns']['fake-ip-range'] ??= '198.18.0.1/16';
+  }
   if (appendSystemDns) {
     final List<String> nameserver = List<String>.from(
       rawConfig['dns']['nameserver'] ?? [],
