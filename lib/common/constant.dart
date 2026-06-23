@@ -60,7 +60,7 @@ const repository = 'chen08209/FlClash';
 const defaultExternalController = '127.0.0.1:9090';
 const maxMobileWidth = 600;
 const maxLaptopWidth = 840;
-const defaultTestUrl = 'https://www.gstatic.com/generate_204';
+const defaultTestUrl = 'http://www.gstatic.com/generate_204';
 final commonFilter = ImageFilter.blur(
   sigmaX: 5,
   sigmaY: 5,
@@ -102,7 +102,7 @@ const proxiesListStoreKey = PageStorageKey<String>('proxies_list');
 const toolsStoreKey = PageStorageKey<String>('tools');
 const profilesStoreKey = PageStorageKey<String>('profiles');
 
-const defaultPrimaryColor = 0XFFD8C0C3;
+const defaultPrimaryColor = 0xFF6750A4;
 
 double getWidgetHeight(num lines) {
   final space = 14.mAp;

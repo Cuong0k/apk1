@@ -122,6 +122,9 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
             (s) => s?.label.isNotEmpty == true ? s!.label : s?.id.toString() ?? '',
           ),
         );
+        final selectedServer = ref.watch(
+          selectedProxyNameProvider(GroupName.GLOBAL.name),
+        );
         return Container(
           padding: EdgeInsets.symmetric(horizontal: 16.ap, vertical: 4),
           child: Row(
@@ -135,20 +138,35 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  isStart
-                      ? (profileLabel.isNotEmpty
-                          ? profileLabel
-                          : context.appLocalizations.connected)
-                      : context.appLocalizations.disconnected,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: isStart
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isStart
+                          ? (profileLabel.isNotEmpty
+                              ? profileLabel
+                              : context.appLocalizations.connected)
+                          : context.appLocalizations.disconnected,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: isStart
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (isStart && selectedServer != null && selectedServer.isNotEmpty)
+                      Text(
+                        selectedServer,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
                 ),
               ),
               Switch(
