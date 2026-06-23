@@ -266,12 +266,15 @@ GroupsState filterGroupsState(Ref ref, String query) {
 ProxiesListState proxiesListState(Ref ref) {
   final query = ref.watch(queryProvider(QueryTag.proxies));
   final currentGroups = ref.watch(filterGroupsStateProvider(query));
-  final currentUnfoldSet = ref.watch(unfoldSetProvider);
+  var currentUnfoldSet = ref.watch(unfoldSetProvider);
   final cardType = ref.watch(
     proxiesStyleSettingProvider.select((state) => state.cardType),
   );
 
   final columns = ref.watch(proxiesColumnsProvider);
+  if (currentUnfoldSet.isEmpty && currentGroups.value.isNotEmpty) {
+    currentUnfoldSet = currentGroups.value.map((g) => g.name).toSet();
+  }
   return ProxiesListState(
     groups: currentGroups.value,
     currentUnfoldSet: currentUnfoldSet,
