@@ -56,6 +56,9 @@ void updateCurrentUnfoldSet(Set<String> value) {
 }
 
 Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
+  // libclash.so panics when the Go runtime calls into VLESS protocol handler
+  if (proxy.type.toLowerCase() == 'vless') return;
+
   final ref = globalState.container;
   final groups = getGroups();
   final selectedMap = ref.read(
@@ -90,6 +93,41 @@ Future<void> delayTest(List<Proxy> proxies, [String? testUrl]) async {
     await Future.wait(batchDelayProxies);
   }
   globalState.container.read(sortNumProvider.notifier).add();
+  _autoSwitchTimedOutProxies();
+}
+
+void _autoSwitchTimedOutProxies() {
+  final ref = globalState.container;
+  final groups = getGroups();
+  for (final group in groups) {
+    if (group.type != GroupType.Selector) continue;
+    final selectedName = ref.read(selectedProxyNameProvider(group.name));
+    if (selectedName == null || selectedName.isEmpty) continue;
+    final currentDelay = ref.read(
+      delayProvider(proxyName: selectedName, testUrl: group.testUrl),
+    );
+    // < 0 = timeout; null = not tested; 0 = in progress; > 0 = ok
+    if (currentDelay == null || currentDelay >= 0) continue;
+    Proxy? best;
+    int bestDelay = 999999;
+    for (final proxy in group.all) {
+      if (proxy.name == selectedName) continue;
+      if (proxy.type.toLowerCase() == 'vless') continue;
+      final d = ref.read(
+        delayProvider(proxyName: proxy.name, testUrl: group.testUrl),
+      );
+      if (d != null && d > 0 && d < bestDelay) {
+        bestDelay = d;
+        best = proxy;
+      }
+    }
+    if (best != null) {
+      ref.read(profilesActionProvider.notifier)
+          .updateCurrentSelectedMap(group.name, best.name);
+      ref.read(proxiesActionProvider.notifier)
+          .changeProxyDebounce(group.name, best.name);
+    }
+  }
 }
 
 double getScrollToSelectedOffset({
