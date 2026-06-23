@@ -10,10 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 double get listHeaderHeight {
   final measure = globalState.measure;
   // Row 1: subscription name (titleMedium)
-  // Row 2: progress bar + icons — icon buttons are 28px (Icon 20 + Padding 4*2)
+  // Row 2: progress bar + icons — PopupMenuButton minimum touch target is 48px
   // Row 3: date text (bodySmall)
   // Padding top=12 bottom=12 matches card's EdgeInsets.fromLTRB(16,12,12,12)
-  return 12.0 + measure.titleMediumHeight + 6.0 + 28.0 + 4.0 + measure.bodySmallHeight + 12.0;
+  return 12.0 + measure.titleMediumHeight + 6.0 + 48.0 + 4.0 + measure.bodySmallHeight + 12.0;
 }
 
 // Compact group header (no subscription info) = same height as proxy cards
