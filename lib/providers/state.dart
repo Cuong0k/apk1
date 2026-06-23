@@ -271,7 +271,6 @@ ProxiesListState proxiesListState(Ref ref) {
     proxiesStyleSettingProvider.select((state) => state.cardType),
   );
 
-  final columns = ref.watch(proxiesColumnsProvider);
   if (currentUnfoldSet.isEmpty && currentGroups.value.isNotEmpty) {
     currentUnfoldSet = currentGroups.value.map((g) => g.name).toSet();
   }
@@ -279,7 +278,7 @@ ProxiesListState proxiesListState(Ref ref) {
     groups: currentGroups.value,
     currentUnfoldSet: currentUnfoldSet,
     proxyCardType: cardType,
-    columns: columns,
+    columns: 1,
   );
 }
 
