@@ -15,6 +15,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'pages/pages.dart';
+import 'pages/token_login.dart';
 
 class Application extends ConsumerStatefulWidget {
   const Application({super.key});
@@ -47,11 +48,19 @@ class ApplicationState extends ConsumerState<Application> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
-      if (globalState.navigatorKey.currentContext != null) {
-        await globalState.attach();
-      } else {
-        exit(0);
+      final ctx = globalState.navigatorKey.currentContext;
+      if (ctx == null) { exit(0); return; }
+      // Show token login on first install (before VPN core starts)
+      final token = await preferences.getVpnToken();
+      if ((token == null || token.isEmpty) && ctx.mounted) {
+        await Navigator.of(ctx).push(
+          MaterialPageRoute<void>(
+            fullscreenDialog: true,
+            builder: (_) => const TokenLoginPage(),
+          ),
+        );
       }
+      await globalState.attach();
       _autoUpdateProfilesTask();
       _initLink();
       app?.initShortcuts();
@@ -160,7 +169,7 @@ class ApplicationState extends ConsumerState<Application> {
           title: appName,
           locale: utils.getLocaleForString(locale),
           supportedLocales: AppLocalizations.delegate.supportedLocales,
-          themeMode: themeProps.themeMode,
+          themeMode: ThemeMode.light,
           theme: ThemeData(
             useMaterial3: true,
             pageTransitionsTheme: _pageTransitionsTheme,

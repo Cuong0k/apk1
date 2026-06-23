@@ -577,13 +577,16 @@ class _ListHeaderState extends State<ListHeader> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Row 1: group name (bold, no icons)
-          EmojiText(
-            groupName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: context.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+          // Row 1: group name — tap to expand/collapse
+          GestureDetector(
+            onTap: () => _handleChange(groupName),
+            child: EmojiText(
+              groupName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -686,13 +689,13 @@ class _ListHeaderState extends State<ListHeader> {
                 ],
               ),
               GestureDetector(
-                onTap: () => _handleChange(groupName),
+                onTap: () => _updateProfile(),
                 child: Padding(
                   padding: const EdgeInsets.all(4),
                   child: Icon(
-                    isExpand ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    Icons.sync,
                     size: 20,
-                    color: context.colorScheme.onSurfaceVariant,
+                    color: context.colorScheme.primary,
                   ),
                 ),
               ),

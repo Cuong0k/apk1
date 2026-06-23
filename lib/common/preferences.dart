@@ -85,6 +85,16 @@ class Preferences {
     return preferences?.setString(configKey, json.encode(config)) ?? false;
   }
 
+  Future<String?> getVpnToken() async {
+    final preferences = await sharedPreferencesCompleter.future;
+    return preferences?.getString('vpnstore_token');
+  }
+
+  Future<void> setVpnToken(String token) async {
+    final preferences = await sharedPreferencesCompleter.future;
+    await preferences?.setString('vpnstore_token', token);
+  }
+
   Future<void> clearPreferences() async {
     final sharedPreferencesIns = await sharedPreferencesCompleter.future;
     await sharedPreferencesIns?.clear();

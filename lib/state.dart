@@ -317,8 +317,6 @@ class GlobalState {
       window?.hide();
     }
     await _handleFailedPreference();
-    await _handlerDisclaimer();
-    await _showCrashlyticsTip();
     await container.read(coreActionProvider.notifier).connectCore();
     await container.read(coreActionProvider.notifier).initCore();
     await container.read(setupActionProvider.notifier).initStatus();
