@@ -200,7 +200,7 @@ _FallbackFilter _$FallbackFilterFromJson(
   geoipCode: json['geoip-code'] as String? ?? 'CN',
   geosite:
       (json['geosite'] as List<dynamic>?)?.map((e) => e as String).toList() ??
-      const [],
+      const ['gfw'],
   ipcidr:
       (json['ipcidr'] as List<dynamic>?)?.map((e) => e as String).toList() ??
       const ['240.0.0.0/4'],
@@ -225,7 +225,7 @@ _Dns _$DnsFromJson(Map<String, dynamic> json) => _Dns(
   useHosts: json['use-hosts'] as bool? ?? true,
   useSystemHosts: json['use-system-hosts'] as bool? ?? true,
   respectRules: json['respect-rules'] as bool? ?? false,
-  ipv6: json['ipv6'] as bool? ?? false,
+  ipv6: json['ipv6'] as bool? ?? true,
   defaultNameserver:
       (json['default-nameserver'] as List<dynamic>?)
           ?.map((e) => e as String)

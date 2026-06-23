@@ -457,9 +457,14 @@ class _ListHeaderState extends State<ListHeader> {
   Future<void> _updateProfile() async {
     final profile = widget.profile;
     if (profile == null) return;
-    globalState.container
-        .read(profilesActionProvider.notifier)
-        .updateProfile(profile, showLoading: true);
+    try {
+      await globalState.container
+          .read(profilesActionProvider.notifier)
+          .updateProfile(profile, showLoading: true);
+      globalState.showNotifier('Cập nhật gói VPN thành công');
+    } catch (_) {
+      globalState.showNotifier('Cập nhật thất bại, vui lòng thử lại');
+    }
   }
 
   void _editProfile(BuildContext context) {

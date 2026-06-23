@@ -248,7 +248,7 @@ abstract class FallbackFilter with _$FallbackFilter {
   const factory FallbackFilter({
     @Default(true) bool geoip,
     @Default('CN') @JsonKey(name: 'geoip-code') String geoipCode,
-    @Default([]) List<String> geosite,
+    @Default(['gfw']) List<String> geosite,
     @Default(['240.0.0.0/4']) List<String> ipcidr,
     @Default(['+.google.com', '+.facebook.com', '+.youtube.com'])
     List<String> domain,
@@ -267,7 +267,7 @@ abstract class Dns with _$Dns {
     @Default(true) @JsonKey(name: 'use-hosts') bool useHosts,
     @Default(true) @JsonKey(name: 'use-system-hosts') bool useSystemHosts,
     @Default(false) @JsonKey(name: 'respect-rules') bool respectRules,
-    @Default(false) bool ipv6,
+    @Default(true) bool ipv6,
     @Default(['223.5.5.5'])
     @JsonKey(name: 'default-nameserver')
     List<String> defaultNameserver,

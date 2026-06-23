@@ -164,9 +164,6 @@ class AboutView extends StatelessWidget {
           ],
         ),
       ),
-      const SizedBox(height: 12),
-      ..._buildContributorsSection(appLocalizations),
-      ..._buildMoreSection(context),
     ];
     return BaseScaffold(
       title: appLocalizations.about,

@@ -7,12 +7,23 @@ import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 const _kSubBase = 'https://client-user.jiangsuhk.com';
+const _kValidHost = 'client-user.jiangsuhk.com';
 
 String _subUrl(String token) =>
     '$_kSubBase/api/v1/client/subscribe?token=$token&flag=clash';
+
+// Extract the raw token from whatever the user pasted (URL or plain text)
+String _extractToken(String raw) {
+  if (raw.startsWith('http')) {
+    final uri = Uri.tryParse(raw);
+    return uri?.queryParameters['token'] ?? '';
+  }
+  return raw.trim();
+}
 
 // ─── Token login page ─────────────────────────────────────────────────────────
 
@@ -39,12 +50,8 @@ class _TokenLoginPageState extends State<TokenLoginPage> {
       MaterialPageRoute(builder: (_) => const _QrScanPage()),
     );
     if (result == null || result.isEmpty) return;
-    if (result.startsWith('http')) {
-      final uri = Uri.tryParse(result);
-      _ctrl.text = uri?.queryParameters['token'] ?? result;
-    } else {
-      _ctrl.text = result;
-    }
+    // Always extract token — never trust a foreign server URL
+    _ctrl.text = _extractToken(result);
   }
 
   Future<void> _confirm() async {
@@ -53,12 +60,19 @@ class _TokenLoginPageState extends State<TokenLoginPage> {
       setState(() => _error = 'Vui lòng nhập token');
       return;
     }
+    // Only accept plain tokens; reject full URLs from other servers
+    final token = _extractToken(raw);
+    if (token.isEmpty) {
+      setState(() => _error = 'Token không hợp lệ');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    final subUrl = raw.startsWith('http') ? raw : _subUrl(raw);
+    // ALWAYS validate against client-user.jiangsuhk.com, never other servers
+    final subUrl = _subUrl(token);
 
     try {
       final client = HttpClient()
@@ -85,7 +99,7 @@ class _TokenLoginPageState extends State<TokenLoginPage> {
         return;
       }
 
-      await preferences.setVpnToken(raw);
+      await preferences.setVpnToken(token);
 
       final container = globalState.container;
       try {
@@ -227,6 +241,22 @@ class _QrScanPageState extends State<_QrScanPage> {
     super.dispose();
   }
 
+  Future<void> _pickFromGallery() async {
+    final xFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (xFile == null) return;
+    final tmpCtrl = MobileScannerController();
+    try {
+      final capture = await tmpCtrl.analyzeImage(
+        xFile.path,
+        formats: [BarcodeFormat.qrCode],
+      );
+      final raw = capture?.barcodes.firstOrNull?.rawValue ?? '';
+      if (raw.isNotEmpty && mounted) Navigator.of(context).pop(raw);
+    } finally {
+      tmpCtrl.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,6 +266,13 @@ class _QrScanPageState extends State<_QrScanPage> {
         backgroundColor: Colors.transparent,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text('Quét mã QR', style: TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.photo_library, color: Colors.white),
+            tooltip: 'Chọn từ thư viện',
+            onPressed: _pickFromGallery,
+          ),
+        ],
       ),
       body: MobileScanner(controller: _ctrl),
     );
