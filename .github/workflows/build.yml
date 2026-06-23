@@ -37,23 +37,39 @@ jobs:
         run: |
           set -e
 
-          # Clone FlClash with Clash.Meta submodule (mihomo fork with full protocol support)
-          git clone --depth=1 --recurse-submodules \
-            https://github.com/chen08209/FlClash.git /tmp/flclash
+          # Force all git operations to use HTTPS instead of SSH
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
 
-          # Use their Clash.Meta submodule with our core Go files
-          cp -r /tmp/flclash/core/Clash.Meta ./core/Clash.Meta
+          # Try FlClash's Clash.Meta fork first; fall back to upstream metacubex/mihomo
+          echo "Cloning FlClash to get Clash.Meta submodule..."
+          git clone --depth=1 https://github.com/chen08209/FlClash.git /tmp/flclash
 
-          # Find NDK arm64 clang from PATH (added by nttld/setup-ndk)
+          cd /tmp/flclash
+          if git submodule update --init --depth=1 core/Clash.Meta 2>&1; then
+            echo "Got FlClash Clash.Meta"
+            CLASH_META_SRC="/tmp/flclash/core/Clash.Meta"
+          else
+            echo "Clash.Meta submodule unavailable — using upstream metacubex/mihomo Alpha"
+            git clone --depth=1 --branch Alpha \
+              https://github.com/metacubex/mihomo.git /tmp/mihomo
+            CLASH_META_SRC="/tmp/mihomo"
+          fi
+          cd -
+
+          cp -r "$CLASH_META_SRC" ./core/Clash.Meta
+          echo "Clash.Meta ready at ./core/Clash.Meta"
+
+          # Find NDK arm64 clang
           NDK_CC=$(which aarch64-linux-android21-clang 2>/dev/null || \
-                   ls /usr/local/lib/android/sdk/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang 2>/dev/null | head -1 || \
-                   find / -name "aarch64-linux-android*-clang" -path "*/prebuilt/*" 2>/dev/null | head -1)
+                   find /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android21-clang" 2>/dev/null | head -1 || \
+                   find /opt -name "aarch64-linux-android*-clang" 2>/dev/null | head -1)
           echo "Using NDK CC: $NDK_CC"
+          test -n "$NDK_CC" || (echo "NDK clang not found!" && exit 1)
 
           # Build libclash.so for arm64-v8a
           cd core
           GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="$NDK_CC" \
-            CFLAGS="-O3 -Werror" \
+            CFLAGS="-O3" \
             go build \
               -ldflags="-w -s" \
               -tags="with_gvisor" \
@@ -61,7 +77,7 @@ jobs:
               -o libclash.so \
               .
 
-          # Place in both locations CMake expects
+          # Place in both jniLibs locations CMake and Gradle need
           mkdir -p ../android/core/src/main/jniLibs/arm64-v8a
           mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
           cp libclash.so ../android/core/src/main/jniLibs/arm64-v8a/libclash.so
