@@ -215,6 +215,24 @@ Future<VM2<String, String>> _makeRealProfileTask(
     rawConfig['dns']['enhanced-mode'] = 'fake-ip';
     rawConfig['dns']['fake-ip-range'] ??= '198.18.0.1/16';
   }
+  // Ensure fake-ip-filter exists to prevent proxy servers and system domains from getting fake IPs
+  rawConfig['dns']['fake-ip-filter'] ??= [
+    '*.lan',
+    '*.local',
+    'localhost',
+    '+.stun.*.*',
+    '+.stun.*.*.*',
+    'time.windows.com',
+    'time.nist.gov',
+    'time.apple.com',
+    'time.cloudflare.com',
+    'pool.ntp.org',
+    '+.ntp.org',
+    'dns.google',
+    '*.msftncsi.com',
+    'connectivitycheck.gstatic.com',
+    'captive.apple.com',
+  ];
   if (appendSystemDns) {
     final List<String> nameserver = List<String>.from(
       rawConfig['dns']['nameserver'] ?? [],
