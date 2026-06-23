@@ -25,6 +25,42 @@ String _extractToken(String raw) {
   return raw.trim();
 }
 
+// ─── Token validation helpers ─────────────────────────────────────────────────
+
+/// Returns false only on a clear auth error (401/403/404).
+/// Returns true on network errors so we don't force-logout on bad connectivity.
+Future<bool> validateStoredToken() async {
+  final token = await preferences.getVpnToken();
+  if (token == null || token.isEmpty) return false;
+  try {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    final req = await client.getUrl(Uri.parse(_subUrl(token)));
+    req.headers.set('User-Agent', 'clash.meta');
+    final res = await req.close();
+    await res.drain<void>();
+    client.close();
+    if (res.statusCode == 401 || res.statusCode == 403 || res.statusCode == 404) {
+      return false;
+    }
+    return true;
+  } catch (_) {
+    return true; // network error → don't force logout
+  }
+}
+
+/// Clears token and shows token login screen.
+Future<void> redirectToTokenLogin() async {
+  await preferences.setVpnToken('');
+  final ctx = globalState.navigatorKey.currentContext;
+  if (ctx == null || !ctx.mounted) return;
+  await Navigator.of(ctx).push(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => const TokenLoginPage(),
+    ),
+  );
+}
+
 // ─── Token login page ─────────────────────────────────────────────────────────
 
 class TokenLoginPage extends StatefulWidget {
