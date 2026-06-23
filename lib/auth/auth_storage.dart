@@ -45,12 +45,12 @@ class AuthStorage {
       if (uri == null) return input;
       final params = Map<String, String>.from(uri.queryParameters);
       if (!params.containsKey('flag') || params['flag'] == 'v2rayn') {
-        params['flag'] = 'clash';
+        params['flag'] = 'clashmeta';
       }
       return uri.replace(queryParameters: params).toString();
     }
     // Treat as a token
     const base = 'https://client-user.jiangsuhk.com/api/v1/client/subscribe';
-    return '$base?token=$input&flag=clash';
+    return '$base?token=$input&flag=clashmeta';
   }
 }

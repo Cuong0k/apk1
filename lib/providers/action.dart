@@ -927,7 +927,7 @@ class ProfilesAction extends _$ProfilesAction {
 
     // Always build URL from our system
     const _kSubBase = 'https://client-user.jiangsuhk.com';
-    final subUrl = '$_kSubBase/api/v1/client/subscribe?token=$token&flag=clash';
+    final subUrl = '$_kSubBase/api/v1/client/subscribe?token=$token&flag=clashmeta';
 
     // Validate token against our system before adding
     try {
