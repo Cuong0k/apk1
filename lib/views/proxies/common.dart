@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/core/core.dart';
 import 'package:fl_clash/enum/enum.dart';
@@ -57,9 +59,6 @@ void updateCurrentUnfoldSet(Set<String> value) {
 }
 
 Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
-  // libclash.so panics when the Go runtime calls into VLESS protocol handler
-  if (proxy.type.toLowerCase() == 'vless') return;
-
   final ref = globalState.container;
   final groups = getGroups();
   final selectedMap = ref.read(
@@ -85,6 +84,8 @@ Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
 }
 
 Future<void> delayTest(List<Proxy> proxies, [String? testUrl]) async {
+  _ensureNetworkMonitorStarted();
+
   final delayProxies = proxies.map<Future>((proxy) async {
     await proxyDelayTest(proxy, testUrl);
   }).toList();
@@ -109,27 +110,84 @@ void _autoSwitchTimedOutProxies() {
     );
     // < 0 = timeout; null = not tested; 0 = in progress; > 0 = ok
     if (currentDelay == null || currentDelay >= 0) continue;
-    Proxy? best;
-    int bestDelay = 999999;
-    for (final proxy in group.all) {
-      if (proxy.name == selectedName) continue;
-      if (proxy.type.toLowerCase() == 'vless') continue;
-      final d = ref.read(
-        delayProvider(proxyName: proxy.name, testUrl: group.testUrl),
-      );
-      if (d != null && d > 0 && d < bestDelay) {
-        bestDelay = d;
-        best = proxy;
-      }
+    _switchToBest(ref, group, selectedName);
+  }
+}
+
+void _switchToBest(ProviderContainer ref, Group group, String currentName) {
+  Proxy? best;
+  int bestDelay = 999999;
+  for (final proxy in group.all) {
+    if (proxy.name == currentName) continue;
+    final d = ref.read(
+      delayProvider(proxyName: proxy.name, testUrl: group.testUrl),
+    );
+    if (d != null && d > 0 && d < bestDelay) {
+      bestDelay = d;
+      best = proxy;
     }
-    if (best != null) {
-      ref.read(profilesActionProvider.notifier)
-          .updateCurrentSelectedMap(group.name, best.name);
-      ref.read(proxiesActionProvider.notifier)
-          .changeProxyDebounce(group.name, best.name);
+  }
+  if (best != null) {
+    ref.read(profilesActionProvider.notifier)
+        .updateCurrentSelectedMap(group.name, best.name);
+    ref.read(proxiesActionProvider.notifier)
+        .changeProxyDebounce(group.name, best.name);
+  }
+}
+
+// ─── Background network monitor ──────────────────────────────────────────────
+
+Timer? _networkMonitorTimer;
+
+// Started lazily on first delay test; runs every 30s while VPN is active
+void _ensureNetworkMonitorStarted() {
+  if (_networkMonitorTimer != null) return;
+  _networkMonitorTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _backgroundNetworkCheck();
+  });
+}
+
+Future<void> _backgroundNetworkCheck() async {
+  final ref = globalState.container;
+  final isStart = ref.read(isStartProvider);
+  if (!isStart) return;
+
+  final groups = getGroups();
+  bool anyBad = false;
+
+  // Test current proxy for each selector group
+  for (final group in groups) {
+    if (group.type != GroupType.Selector) continue;
+    final selectedName = ref.read(selectedProxyNameProvider(group.name));
+    if (selectedName == null || selectedName.isEmpty) continue;
+
+    // Find the proxy object
+    Proxy? proxy;
+    for (final p in group.all) {
+      if (p.name == selectedName) { proxy = p; break; }
+    }
+    if (proxy == null) continue;
+
+    await proxyDelayTest(proxy, group.testUrl);
+
+    final delay = ref.read(
+      delayProvider(proxyName: selectedName, testUrl: group.testUrl),
+    );
+    // Trigger full re-test if timeout or very high latency (>1500ms)
+    if (delay != null && (delay < 0 || delay > 1500)) {
+      anyBad = true;
+    }
+  }
+
+  if (anyBad) {
+    // Full test to find better servers, then auto-switch
+    for (final group in groups) {
+      await delayTest(group.all, group.testUrl);
     }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 double getScrollToSelectedOffset({
   required String groupName,

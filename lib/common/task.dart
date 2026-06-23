@@ -117,7 +117,7 @@ Future<VM2<String, String>> _makeRealProfileTask(
   rawConfig['interface-name'] = '';
   rawConfig['external-ui-url'] = '';
   rawConfig['tcp-concurrent'] = realPatchConfig.tcpConcurrent;
-  rawConfig['unified-delay'] = realPatchConfig.unifiedDelay;
+  rawConfig['unified-delay'] = true;
   rawConfig['ipv6'] = realPatchConfig.ipv6;
   rawConfig['log-level'] = realPatchConfig.logLevel.name;
   rawConfig['port'] = 0;
