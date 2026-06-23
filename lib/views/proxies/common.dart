@@ -12,11 +12,8 @@ double get listHeaderHeight {
   return 16 + measure.titleMediumHeight + 6 + measure.bodySmallHeight + 4 + measure.bodySmallHeight + 16;
 }
 
-// Height for group header without subscription info (name row only)
-double get listHeaderMinHeight {
-  final measure = globalState.measure;
-  return 16 + measure.titleMediumHeight + 16;
-}
+// Compact group header (no subscription info) = same height as proxy cards
+double get listHeaderMinHeight => 52.0;
 
 double getItemHeight(ProxyCardType proxyCardType) {
   return 52.0;

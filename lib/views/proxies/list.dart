@@ -367,11 +367,11 @@ class _ProxiesListViewState extends State<ProxiesListView> {
                             child: Container(
                               width: container.maxWidth,
                               color: context.colorScheme.surface,
-                              padding: const EdgeInsets.only(
-                                top: 16,
-                                left: 16,
-                                right: 16,
-                                bottom: 8,
+                              padding: EdgeInsets.only(
+                                top: hasSubInfo ? 16 : 0,
+                                left: hasSubInfo ? 16 : 0,
+                                right: hasSubInfo ? 16 : 0,
+                                bottom: hasSubInfo ? 8 : 0,
                               ),
                               child: _buildHeader(
                                 ref,
@@ -514,6 +514,51 @@ class _ListHeaderState extends State<ListHeader> {
 
   @override
   Widget build(BuildContext context) {
+    // Groups without subscription info → compact flat row (same height/style as proxy cards)
+    if (widget.subscriptionInfo == null) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => _handleChange(groupName),
+          child: Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: EmojiText(
+                    groupName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  groupType,
+                  maxLines: 1,
+                  style: context.textTheme.bodySmall?.copyWith(
+                    color: context.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  isExpand ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  size: 20,
+                  color: context.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Groups with subscription info → full card with progress bar + date
     return Container(
       decoration: BoxDecoration(
         color: context.colorScheme.surfaceContainerLow,
