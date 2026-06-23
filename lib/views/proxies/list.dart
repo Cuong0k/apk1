@@ -9,6 +9,8 @@ import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:fl_clash/views/profiles/add.dart';
+import 'package:fl_clash/views/profiles/edit.dart';
 import 'card.dart';
 import 'common.dart';
 
@@ -128,11 +130,11 @@ class _ProxiesListViewState extends State<ProxiesListView> {
       final groupName = group.name;
       final isExpand = currentUnfoldSet.contains(groupName);
 
+      // Since we only show top-level groups now, the first group always
+      // corresponds to the current profile — show sub info for any visible group
       final hasSubInfo = profile != null &&
           profile.subscriptionInfo != null &&
-          (profile.subscriptionInfo!.total > 0) &&
-          (profile.label == groupName ||
-              (profile.label.isEmpty && groups.first == group));
+          (profile.subscriptionInfo!.total > 0);
 
       final headerHeight =
           hasSubInfo ? listHeaderHeight : listHeaderMinHeight;
@@ -356,10 +358,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
                       final group = state.groups[index];
                       final hasSubInfo = profile != null &&
                           profile.subscriptionInfo != null &&
-                          (profile.subscriptionInfo!.total > 0) &&
-                          (profile.label == group.name ||
-                              (profile.label.isEmpty &&
-                                  state.groups.first == group));
+                          (profile.subscriptionInfo!.total > 0);
                       final headerHeight = hasSubInfo
                           ? listHeaderHeight
                           : listHeaderMinHeight;
@@ -461,6 +460,28 @@ class _ListHeaderState extends State<ListHeader> {
     globalState.container
         .read(profilesActionProvider.notifier)
         .updateProfile(profile, showLoading: true);
+  }
+
+  void _editProfile(BuildContext context) {
+    final profile = widget.profile;
+    if (profile == null) return;
+    showExtend(
+      context,
+      builder: (_) => AdaptiveSheetScaffold(
+        body: EditProfileView(context: context, profile: profile),
+        title: context.appLocalizations.edit,
+      ),
+    );
+  }
+
+  void _addProfile(BuildContext context) {
+    showExtend(
+      context,
+      builder: (_) => AdaptiveSheetScaffold(
+        body: AddProfileView(context: context),
+        title: context.appLocalizations.addProfile,
+      ),
+    );
   }
 
   Future<void> _deleteProfile(BuildContext context) async {
@@ -607,10 +628,24 @@ class _ListHeaderState extends State<ListHeader> {
                 padding: EdgeInsets.zero,
                 iconSize: 18,
                 onSelected: (value) {
+                  if (value == 'edit') _editProfile(context);
                   if (value == 'update') _updateProfile();
+                  if (value == 'add') _addProfile(context);
                   if (value == 'delete') _deleteProfile(context);
                 },
                 itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18,
+                            color: context.colorScheme.onSurface),
+                        const SizedBox(width: 8),
+                        Text(context.appLocalizations.edit,
+                            style: context.textTheme.bodyMedium),
+                      ],
+                    ),
+                  ),
                   PopupMenuItem(
                     value: 'update',
                     child: Row(
@@ -619,6 +654,18 @@ class _ListHeaderState extends State<ListHeader> {
                             color: context.colorScheme.onSurface),
                         const SizedBox(width: 8),
                         Text(context.appLocalizations.update,
+                            style: context.textTheme.bodyMedium),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'add',
+                    child: Row(
+                      children: [
+                        Icon(Icons.add, size: 18,
+                            color: context.colorScheme.onSurface),
+                        const SizedBox(width: 8),
+                        Text(context.appLocalizations.addProfile,
                             style: context.textTheme.bodyMedium),
                       ],
                     ),
