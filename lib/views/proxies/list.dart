@@ -437,7 +437,10 @@ class _ListHeaderState extends State<ListHeader> {
   var isLock = false;
 
   String get icon => widget.group.icon;
-  String get groupName => widget.group.name;
+  // Show profile label (subscription name) when available, else group name
+  String get groupName => (widget.profile?.label.isNotEmpty == true)
+      ? widget.profile!.label
+      : widget.group.name;
   String get groupType => widget.group.type.name;
   bool get isExpand => widget.isExpand;
 
@@ -452,12 +455,40 @@ class _ListHeaderState extends State<ListHeader> {
     widget.onChange(groupName);
   }
 
-  Future<void> _updateProfile(BuildContext context) async {
+  Future<void> _updateProfile() async {
     final profile = widget.profile;
     if (profile == null) return;
     globalState.container
         .read(profilesActionProvider.notifier)
         .updateProfile(profile, showLoading: true);
+  }
+
+  Future<void> _deleteProfile(BuildContext context) async {
+    final profile = widget.profile;
+    if (profile == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.appLocalizations.delete),
+        content: Text(profile.label.isNotEmpty ? profile.label : profile.id.toString()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.appLocalizations.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.appLocalizations.confirm,
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      globalState.container
+          .read(profilesActionProvider.notifier)
+          .deleteProfile(profile.id);
+    }
   }
 
   @override
@@ -576,18 +607,32 @@ class _ListHeaderState extends State<ListHeader> {
                 padding: EdgeInsets.zero,
                 iconSize: 18,
                 onSelected: (value) {
-                  if (value == 'update') _updateProfile(context);
+                  if (value == 'update') _updateProfile();
+                  if (value == 'delete') _deleteProfile(context);
                 },
-                itemBuilder: (_) => [
+                itemBuilder: (ctx) => [
                   PopupMenuItem(
                     value: 'update',
                     child: Row(
                       children: [
-                        Icon(Icons.refresh, size: 18,
+                        Icon(Icons.sync, size: 18,
                             color: context.colorScheme.onSurface),
                         const SizedBox(width: 8),
-                        Text('${context.appLocalizations.update} gói',
+                        Text(context.appLocalizations.update,
                             style: context.textTheme.bodyMedium),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 18,
+                            color: context.colorScheme.error),
+                        const SizedBox(width: 8),
+                        Text(context.appLocalizations.delete,
+                            style: context.textTheme.bodyMedium?.copyWith(
+                                color: context.colorScheme.error)),
                       ],
                     ),
                   ),

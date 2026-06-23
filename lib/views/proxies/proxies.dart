@@ -333,15 +333,34 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
           profilesProvider.select((s) => s.isNotEmpty),
         );
         if (!hasProfiles) return const SizedBox.shrink();
-        return Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8.ap, vertical: 8),
-          child: const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: nd.NetworkDetection()),
-              SizedBox(width: 8),
-              Expanded(child: TrafficUsage()),
-            ],
+        return SizedBox(
+          height: 76,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(8.ap, 4, 8.ap, 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: ClipRect(
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      heightFactor: 76 / getWidgetHeight(1).clamp(1, 999),
+                      child: nd.NetworkDetection(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ClipRect(
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      heightFactor: 76 / getWidgetHeight(2).clamp(1, 999),
+                      child: TrafficUsage(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },

@@ -39,6 +39,8 @@ class HomePage extends StatelessWidget {
               final bottomNavigationBar = NavigationBarTheme(
                 data: _NavigationBarDefaultsM3(context),
                 child: NavigationBar(
+                  height: 58,
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                   destinations: navigationItems
                       .map(
                         (e) => NavigationDestination(

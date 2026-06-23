@@ -271,11 +271,28 @@ ProxiesListState proxiesListState(Ref ref) {
     proxiesStyleSettingProvider.select((state) => state.cardType),
   );
 
-  if (currentUnfoldSet.isEmpty && currentGroups.value.isNotEmpty) {
-    currentUnfoldSet = currentGroups.value.map((g) => g.name).toSet();
+  // Only show top-level Selector groups — hide URLTest/Fallback/Relay/LoadBalance
+  // and any Selector that appears as a proxy member inside another group (sub-group)
+  final allGroups = currentGroups.value;
+  final groupNameSet = allGroups.map((g) => g.name).toSet();
+  final referencedByOtherGroup = <String>{};
+  for (final g in allGroups) {
+    for (final p in g.all) {
+      if (groupNameSet.contains(p.name)) {
+        referencedByOtherGroup.add(p.name);
+      }
+    }
+  }
+  final displayGroups = allGroups.where((g) {
+    if (g.type != GroupType.Selector) return false;
+    return !referencedByOtherGroup.contains(g.name);
+  }).toList();
+
+  if (currentUnfoldSet.isEmpty && displayGroups.isNotEmpty) {
+    currentUnfoldSet = displayGroups.map((g) => g.name).toSet();
   }
   return ProxiesListState(
-    groups: currentGroups.value,
+    groups: displayGroups,
     currentUnfoldSet: currentUnfoldSet,
     proxyCardType: cardType,
     columns: 1,
