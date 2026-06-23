@@ -6,20 +6,27 @@ import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// Height for group header with subscription info (3 content rows)
 double get listHeaderHeight {
   final measure = globalState.measure;
-  return 20 + measure.titleMediumHeight + 4 + measure.bodyMediumHeight + 2;
+  return 16 + measure.titleMediumHeight + 6 + measure.bodySmallHeight + 4 + measure.bodySmallHeight + 16;
+}
+
+// Height for group header without subscription info (name row only)
+double get listHeaderMinHeight {
+  final measure = globalState.measure;
+  return 16 + measure.titleMediumHeight + 16;
 }
 
 double getItemHeight(ProxyCardType proxyCardType) {
-  final measure = globalState.measure;
-  final baseHeight =
-      16 + measure.bodyMediumHeight * 2 + measure.bodySmallHeight + 8 + 4;
-  return switch (proxyCardType) {
-    ProxyCardType.expand => baseHeight + measure.labelSmallHeight + 6,
-    ProxyCardType.shrink => baseHeight,
-    ProxyCardType.min => baseHeight - measure.bodyMediumHeight,
-  };
+  return 52.0;
+}
+
+Future<void> delayTestAllGroups() async {
+  final groups = getCurrentGroups();
+  for (final group in groups) {
+    delayTest(group.all, group.testUrl);
+  }
 }
 
 List<Group> getCurrentGroups() {

@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'common.dart';
 import 'setting.dart';
 import 'tab.dart';
 
@@ -175,9 +176,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
         if (!hasProfiles) return const SizedBox.shrink();
         return InkWell(
           onTap: () async {
-            if (_isTab) {
-              await _proxiesTabKey.currentState?.delayTestCurrentGroup();
-            }
+            await delayTestAllGroups();
           },
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 16.ap, vertical: 10),
@@ -280,10 +279,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
                     InkWell(
                       borderRadius: BorderRadius.circular(6),
                       onTap: () async {
-                        if (_isTab) {
-                          await _proxiesTabKey.currentState
-                              ?.delayTestCurrentGroup();
-                        }
+                        await delayTestAllGroups();
                       },
                       child: Padding(
                         padding: const EdgeInsets.all(4),

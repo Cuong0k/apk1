@@ -3,8 +3,8 @@ import 'dart:math';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
-import 'package:fl_clash/providers/config.dart';
-import 'package:fl_clash/providers/state.dart';
+import 'package:fl_clash/providers/providers.dart';
+import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,7 +46,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
     double headerOffset = 0.0;
     if (index + 1 <= _headerOffset.length - 1) {
       final endOffset = _headerOffset[index + 1];
-      final startOffset = endOffset - listHeaderHeight - 8;
+      final startOffset = endOffset - _currentHeaderHeight(index) - 8;
       if (initOffset > startOffset && initOffset < endOffset) {
         headerOffset = initOffset - startOffset;
       }
@@ -57,18 +57,21 @@ class _ProxiesListViewState extends State<ProxiesListView> {
     );
   }
 
+  double _currentHeaderHeight(int groupIndex) {
+    // approximate — use listHeaderHeight as max
+    return listHeaderHeight;
+  }
+
   void _adjustHeader() {
     _headerStateNotifier.value = _getProxiesListHeaderSelectorState(
       !_controller.hasClients ? 0 : _controller.offset,
     );
   }
 
-  double _getListItemHeight(Type type, ProxyCardType proxyCardType) {
-    return switch (type) {
-      const (SizedBox) => 8,
-      const (ListHeader) => listHeaderHeight,
-      Type() => getItemHeight(proxyCardType),
-    };
+  double _getListItemHeight(Widget item, ProxyCardType proxyCardType) {
+    if (item is ListHeader) return item.heightHint;
+    if (item is SizedBox) return 8;
+    return getItemHeight(proxyCardType);
   }
 
   @override
@@ -101,10 +104,10 @@ class _ProxiesListViewState extends State<ProxiesListView> {
     final List<double> headerOffset = [];
     double currentHeight = 0;
     for (final item in items) {
-      if (item.runtimeType == ListHeader) {
+      if (item is ListHeader) {
         headerOffset.add(currentHeight);
       }
-      final itemHeight = _getListItemHeight(item.runtimeType, proxyCardType);
+      final itemHeight = _getListItemHeight(item, proxyCardType);
       itemHeightList.add(itemHeight);
       currentHeight = currentHeight + itemHeight;
     }
@@ -119,15 +122,29 @@ class _ProxiesListViewState extends State<ProxiesListView> {
     required Set<String> currentUnfoldSet,
     required ProxyCardType cardType,
   }) {
+    final profile = ref.watch(currentProfileProvider);
     final items = <Widget>[];
     for (final group in groups) {
       final groupName = group.name;
       final isExpand = currentUnfoldSet.contains(groupName);
+
+      final hasSubInfo = profile != null &&
+          profile.subscriptionInfo != null &&
+          (profile.subscriptionInfo!.total > 0) &&
+          (profile.label == groupName ||
+              (profile.label.isEmpty && groups.first == group));
+
+      final headerHeight =
+          hasSubInfo ? listHeaderHeight : listHeaderMinHeight;
+
       items.addAll([
         ListHeader(
+          heightHint: headerHeight,
           onScrollToSelected: _scrollToGroupSelected,
           isExpand: isExpand,
           group: group,
+          subscriptionInfo: hasSubInfo ? profile.subscriptionInfo : null,
+          lastUpdateDate: hasSubInfo ? profile.lastUpdateDate : null,
           onChange: (String groupName) {
             _handleChange(currentUnfoldSet, groupName);
           },
@@ -136,35 +153,22 @@ class _ProxiesListViewState extends State<ProxiesListView> {
       ]);
       if (isExpand) {
         final proxies = group.all;
-        final chunks = proxies.chunks(columns);
-        final rows = chunks
-            .map<Widget>((proxies) {
-              final children = proxies
-                  .map<Widget>(
-                    (proxy) => Flexible(
-                      child: SizedBox(
-                        height: getItemHeight(cardType),
-                        child: ProxyCard(
-                          testUrl: group.testUrl,
-                          type: cardType,
-                          groupType: group.type,
-                          key: ValueKey('$groupName.${proxy.name}'),
-                          proxy: proxy,
-                          groupName: groupName,
-                        ),
-                      ),
-                    ),
-                  )
-                  .fill(
-                    columns,
-                    filler: (_) => const Flexible(child: SizedBox()),
-                  )
-                  .separated(const SizedBox(width: 8));
-
-              return Row(children: children.toList());
-            })
-            .separated(const SizedBox(height: 8));
-        items.addAll([...rows, const SizedBox(height: 8)]);
+        for (final proxy in proxies) {
+          items.add(
+            SizedBox(
+              height: 52,
+              child: ProxyCard(
+                testUrl: group.testUrl,
+                type: cardType,
+                groupType: group.type,
+                key: ValueKey('$groupName.${proxy.name}'),
+                proxy: proxy,
+                groupName: groupName,
+              ),
+            ),
+          );
+        }
+        items.add(const SizedBox(height: 8));
       }
     }
     return items;
@@ -174,17 +178,23 @@ class _ProxiesListViewState extends State<ProxiesListView> {
     WidgetRef ref, {
     required Group group,
     required Set<String> currentUnfoldSet,
+    required double headerHeight,
+    SubscriptionInfo? subscriptionInfo,
+    DateTime? lastUpdateDate,
   }) {
     final groupName = group.name;
     final isExpand = currentUnfoldSet.contains(groupName);
     return SizedBox(
-      height: listHeaderHeight,
+      height: headerHeight,
       child: ListHeader(
+        heightHint: headerHeight,
         enterAnimated: false,
         onScrollToSelected: _scrollToGroupSelected,
         key: Key(groupName),
         isExpand: isExpand,
         group: group,
+        subscriptionInfo: subscriptionInfo,
+        lastUpdateDate: lastUpdateDate,
         onChange: (String groupName) {
           _handleChange(currentUnfoldSet, groupName);
         },
@@ -201,6 +211,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
       (item) => item.name == groupName,
     );
     final index = findIndex != -1 ? findIndex : 0;
+    if (index >= _headerOffset.length) return 0;
     return _headerOffset[index];
   }
 
@@ -294,6 +305,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
             label: appLocalizations.nullTip(appLocalizations.proxies),
           );
         }
+        final profile = ref.watch(currentProfileProvider);
         final items = _buildItems(
           ref,
           groups: state.groups,
@@ -341,6 +353,16 @@ class _ProxiesListViewState extends State<ProxiesListView> {
                       if (index < 0 || state.groups.isEmpty) {
                         return Container();
                       }
+                      final group = state.groups[index];
+                      final hasSubInfo = profile != null &&
+                          profile.subscriptionInfo != null &&
+                          (profile.subscriptionInfo!.total > 0) &&
+                          (profile.label == group.name ||
+                              (profile.label.isEmpty &&
+                                  state.groups.first == group));
+                      final headerHeight = hasSubInfo
+                          ? listHeaderHeight
+                          : listHeaderMinHeight;
                       return Stack(
                         children: [
                           Positioned(
@@ -356,8 +378,15 @@ class _ProxiesListViewState extends State<ProxiesListView> {
                               ),
                               child: _buildHeader(
                                 ref,
-                                group: state.groups[index],
+                                group: group,
                                 currentUnfoldSet: state.currentUnfoldSet,
+                                headerHeight: headerHeight,
+                                subscriptionInfo: hasSubInfo
+                                    ? profile!.subscriptionInfo
+                                    : null,
+                                lastUpdateDate: hasSubInfo
+                                    ? profile!.lastUpdateDate
+                                    : null,
                               ),
                             ),
                           ),
@@ -377,12 +406,13 @@ class _ProxiesListViewState extends State<ProxiesListView> {
 
 class ListHeader extends StatefulWidget {
   final Group group;
-
   final Function(String groupName) onChange;
   final Function(String groupName) onScrollToSelected;
   final bool isExpand;
-
   final bool enterAnimated;
+  final double heightHint;
+  final SubscriptionInfo? subscriptionInfo;
+  final DateTime? lastUpdateDate;
 
   const ListHeader({
     super.key,
@@ -391,6 +421,9 @@ class ListHeader extends StatefulWidget {
     required this.onChange,
     required this.onScrollToSelected,
     required this.isExpand,
+    required this.heightHint,
+    this.subscriptionInfo,
+    this.lastUpdateDate,
   });
 
   @override
@@ -401,11 +434,8 @@ class _ListHeaderState extends State<ListHeader> {
   var isLock = false;
 
   String get icon => widget.group.icon;
-
   String get groupName => widget.group.name;
-
   String get groupType => widget.group.type.name;
-
   bool get isExpand => widget.isExpand;
 
   Future<void> _delayTest() async {
@@ -419,185 +449,133 @@ class _ListHeaderState extends State<ListHeader> {
     widget.onChange(groupName);
   }
 
-  Widget _buildIcon() {
-    return Consumer(
-      builder: (_, ref, child) {
-        final iconStyle = ref.watch(
-          proxiesStyleSettingProvider.select((state) => state.iconStyle),
-        );
-        return switch (iconStyle) {
-          ProxiesIconStyle.standard => LayoutBuilder(
-            builder: (_, constraints) {
-              return Container(
-                margin: const EdgeInsets.only(right: 16),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Container(
-                    height: constraints.maxHeight,
-                    width: constraints.maxWidth,
-                    alignment: Alignment.center,
-                    padding: EdgeInsets.all(6.ap),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: context.colorScheme.secondaryContainer,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: IconTheme.merge(
-                      data: IconThemeData(size: constraints.maxHeight - 12.ap),
-                      child: CommonTargetIcon(src: icon),
-                    ),
+  Widget _buildSubscriptionRow(BuildContext context) {
+    final info = widget.subscriptionInfo;
+    final lastUpdate = widget.lastUpdateDate;
+    if (info == null || info.total == 0) return const SizedBox.shrink();
+
+    final used = info.upload + info.download;
+    final total = info.total;
+    final progress = (used / total).clamp(0.0, 1.0);
+    final usedStr = used.traffic.show;
+    final totalStr = total.traffic.show;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 5,
+                  backgroundColor: context.colorScheme.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    context.colorScheme.primary,
                   ),
                 ),
-              );
-            },
-          ),
-          ProxiesIconStyle.icon => Container(
-            margin: const EdgeInsets.only(right: 16),
-            child: LayoutBuilder(
-              builder: (_, constraints) {
-                return IconTheme.merge(
-                  data: IconThemeData(size: constraints.maxHeight - 8.ap),
-                  child: CommonTargetIcon(src: icon),
-                );
-              },
+              ),
             ),
-          ),
-          ProxiesIconStyle.none => Container(),
-        };
-      },
+            const SizedBox(width: 10),
+            Text(
+              '$usedStr / $totalStr',
+              style: context.textTheme.bodySmall?.copyWith(
+                color: context.colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            if (lastUpdate != null) ...[
+              Text(
+                '${lastUpdate.year}-${lastUpdate.month.toString().padLeft(2, '0')}-${lastUpdate.day.toString().padLeft(2, '0')}',
+                style: context.textTheme.bodySmall?.copyWith(
+                  color: context.colorScheme.onSurfaceVariant,
+                  fontSize: 11,
+                ),
+              ),
+              Text(
+                ' · ${lastUpdate.getLastUpdateTimeDesc(context)}',
+                style: context.textTheme.bodySmall?.copyWith(
+                  color: context.colorScheme.onSurfaceVariant,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return CommonCard(
-      enterAnimated: widget.enterAnimated,
-      key: widget.key,
-      radius: 18.ap,
-      type: CommonCardType.filled,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Flexible(
-              child: Row(
-                children: [
-                  _buildIcon(),
-                  Flexible(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        EmojiText(
-                          groupName,
-                          style: context.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Flexible(
-                          flex: 1,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                groupType,
-                                style: context.textTheme.labelMedium?.toLight,
-                              ),
-                              Flexible(
-                                flex: 1,
-                                child: Consumer(
-                                  builder: (_, ref, _) {
-                                    final proxyName = ref
-                                        .watch(
-                                          selectedProxyNameProvider(groupName),
-                                        )
-                                        .takeFirstValid([]);
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.start,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        if (proxyName.isNotEmpty) ...[
-                                          Flexible(
-                                            flex: 1,
-                                            child: EmojiText(
-                                              overflow: TextOverflow.ellipsis,
-                                              ' · $proxyName',
-                                              style: context
-                                                  .textTheme
-                                                  .labelMedium
-                                                  ?.toLight,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                      ],
-                    ),
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: EmojiText(
+                  groupName,
+                  style: context.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
+                ),
               ),
-            ),
-            Row(
-              children: [
-                if (isExpand) ...[
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.all(2),
-                    onPressed: () {
-                      widget.onScrollToSelected(groupName);
-                    },
-                    style: const ButtonStyle(
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    iconSize: 19,
-                    icon: const Icon(Icons.adjust),
-                  ),
-                  const SizedBox(width: 2),
-                  IconButton(
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.all(2),
-                    onPressed: _delayTest,
-                    style: const ButtonStyle(
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    icon: const Icon(Icons.network_ping),
-                  ),
-                  const SizedBox(width: 6),
-                ] else
-                  const SizedBox(width: 6),
-                IconButton.filledTonal(
+              if (isExpand) ...[
+                IconButton(
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.all(2),
-                  iconSize: 24,
+                  onPressed: () {
+                    widget.onScrollToSelected(groupName);
+                  },
                   style: const ButtonStyle(
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  onPressed: () {
-                    _handleChange(groupName);
-                  },
-                  icon: CommonExpandIcon(expand: isExpand),
+                  iconSize: 18,
+                  icon: const Icon(Icons.adjust),
                 ),
-              ],
-            ),
-          ],
-        ),
+                IconButton(
+                  iconSize: 18,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(2),
+                  onPressed: _delayTest,
+                  style: const ButtonStyle(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.network_ping),
+                ),
+                const SizedBox(width: 2),
+              ] else
+                const SizedBox(width: 2),
+              GestureDetector(
+                onTap: () => _handleChange(groupName),
+                child: Icon(
+                  isExpand ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  size: 22,
+                  color: context.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          _buildSubscriptionRow(context),
+        ],
       ),
-      onPressed: () {
-        _handleChange(groupName);
-      },
     );
   }
 }
