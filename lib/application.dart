@@ -94,10 +94,6 @@ class ApplicationState extends ConsumerState<Application> {
   void _autoUpdateProfilesTask() {
     _autoUpdateProfilesTaskTimer = Timer(const Duration(minutes: 20), () async {
       await ref.read(profilesActionProvider.notifier).autoUpdateProfiles();
-      final valid = await validateStoredToken();
-      if (!valid) {
-        await redirectToTokenLogin();
-      }
       _autoUpdateProfilesTask();
     });
   }

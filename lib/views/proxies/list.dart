@@ -9,7 +9,6 @@ import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:fl_clash/pages/token_login.dart';
 import 'package:fl_clash/views/profiles/add.dart';
 import 'package:fl_clash/views/profiles/edit.dart';
 import 'card.dart';
@@ -464,11 +463,6 @@ class _ListHeaderState extends State<ListHeader> {
           .updateProfile(profile, showLoading: true);
       globalState.showNotifier('Cập nhật gói VPN thành công');
     } catch (_) {
-      final stillValid = await validateStoredToken();
-      if (!stillValid) {
-        await redirectToTokenLogin();
-        return;
-      }
       globalState.showNotifier('Cập nhật thất bại, vui lòng thử lại');
     }
   }
