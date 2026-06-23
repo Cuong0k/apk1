@@ -33,68 +33,141 @@ jobs:
           flutter-version: 3.41.9
           cache: true
 
-      - name: Build libclash.so from source
+      - name: Get libclash.so (FlClash release → fallback source build)
         run: |
           set -e
-
-          # Force all git operations to use HTTPS instead of SSH
           git config --global url."https://github.com/".insteadOf "git@github.com:"
 
-          # Try FlClash's Clash.Meta fork first; fall back to upstream metacubex/mihomo
-          echo "Cloning FlClash to get Clash.Meta submodule..."
-          git clone --depth=1 https://github.com/chen08209/FlClash.git /tmp/flclash
+          JNILIBS_CORE=android/core/src/main/jniLibs/arm64-v8a
+          JNILIBS_APP=android/app/src/main/jniLibs/arm64-v8a
+          mkdir -p "$JNILIBS_CORE" "$JNILIBS_APP"
 
-          cd /tmp/flclash
-          if git submodule update --init --depth=1 core/Clash.Meta 2>&1; then
-            echo "Got FlClash Clash.Meta"
-            CLASH_META_SRC="/tmp/flclash/core/Clash.Meta"
-          else
-            echo "Clash.Meta submodule unavailable — using upstream metacubex/mihomo Alpha"
-            git clone --depth=1 --branch Alpha \
-              https://github.com/metacubex/mihomo.git /tmp/mihomo
-            CLASH_META_SRC="/tmp/mihomo"
+          # ── Try pre-built libclash.so from FlClash official release ────────
+          echo "=== Fetching FlClash latest release ==="
+          RELEASE_JSON=$(curl -sf "https://api.github.com/repos/chen08209/FlClash/releases/latest" || true)
+
+          if [ -n "$RELEASE_JSON" ]; then
+            APK_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' \
+              | grep -i 'android' | grep -i 'arm64' | grep -v 'universal' \
+              | head -1 | cut -d'"' -f4)
+            [ -z "$APK_URL" ] && APK_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' \
+              | grep -i 'android' | head -1 | cut -d'"' -f4)
           fi
-          cd -
 
-          cp -r "$CLASH_META_SRC" ./core/Clash.Meta
-          echo "Clash.Meta ready at ./core/Clash.Meta"
+          if [ -n "$APK_URL" ]; then
+            echo "Downloading: $APK_URL"
+            if curl -sfL -o /tmp/flclash.apk "$APK_URL"; then
+              mkdir -p /tmp/flclash_apk
+              if unzip -o /tmp/flclash.apk "lib/arm64-v8a/libclash.so" -d /tmp/flclash_apk 2>/dev/null; then
+                SO=/tmp/flclash_apk/lib/arm64-v8a/libclash.so
+                if [ -f "$SO" ] && [ "$(stat -c%s "$SO")" -gt 1000000 ]; then
+                  echo "✓ Got libclash.so from FlClash release ($(stat -c%s "$SO") bytes)"
+                  cp "$SO" "$JNILIBS_CORE/libclash.so"
+                  cp "$SO" "$JNILIBS_APP/libclash.so"
+                  echo "LIBCLASH_SOURCE=release" >> "$GITHUB_ENV"
+                fi
+              fi
+            fi
+          fi
 
-          # Find NDK arm64 clang
-          NDK_CC=$(which aarch64-linux-android21-clang 2>/dev/null || \
-                   find /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android21-clang" 2>/dev/null | head -1 || \
-                   find /opt -name "aarch64-linux-android*-clang" 2>/dev/null | head -1)
-          echo "Using NDK CC: $NDK_CC"
-          test -n "$NDK_CC" || (echo "NDK clang not found!" && exit 1)
+          # ── Fallback: build from source ─────────────────────────────────
+          if [ "${LIBCLASH_SOURCE:-}" != "release" ]; then
+            echo "=== Building libclash.so from source ==="
+            git clone --depth=1 https://github.com/chen08209/FlClash.git /tmp/flclash
+            cd /tmp/flclash
+            if git submodule update --init --depth=1 core/Clash.Meta 2>&1; then
+              CLASH_META_SRC="/tmp/flclash/core/Clash.Meta"
+            else
+              git clone --depth=1 --branch Alpha \
+                https://github.com/metacubex/mihomo.git /tmp/mihomo
+              CLASH_META_SRC="/tmp/mihomo"
+            fi
+            cd -
+            cp -r "$CLASH_META_SRC" ./core/Clash.Meta
 
-          # Build libclash.so for arm64-v8a
-          cd core
-          GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="$NDK_CC" \
-            CFLAGS="-O3" \
-            go build \
-              -ldflags="-w -s" \
-              -tags="with_gvisor" \
-              -buildmode=c-shared \
-              -o libclash.so \
-              .
+            NDK_CC=$(which aarch64-linux-android21-clang 2>/dev/null || \
+                     find /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android21-clang" 2>/dev/null | head -1 || \
+                     find /opt -name "aarch64-linux-android*-clang" 2>/dev/null | head -1)
+            test -n "$NDK_CC" || (echo "NDK clang not found!" && exit 1)
 
-          # Place in both jniLibs locations CMake and Gradle need
-          mkdir -p ../android/core/src/main/jniLibs/arm64-v8a
-          mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
-          cp libclash.so ../android/core/src/main/jniLibs/arm64-v8a/libclash.so
-          cp libclash.so ../android/app/src/main/jniLibs/arm64-v8a/libclash.so
+            cd core
+            GOOS=android GOARCH=arm64 CGO_ENABLED=1 CC="$NDK_CC" CFLAGS="-O3" \
+              go build -ldflags="-w -s" -tags="with_gvisor" -buildmode=c-shared -o libclash.so .
+            cd -
+            cp core/libclash.so "$JNILIBS_CORE/libclash.so"
+            cp core/libclash.so "$JNILIBS_APP/libclash.so"
+            echo "✓ Built libclash.so from source"
+          fi
 
-          ls -lh ../android/core/src/main/jniLibs/arm64-v8a/
-          ls -lh ../android/app/src/main/jniLibs/arm64-v8a/
+          ls -lh "$JNILIBS_APP/libclash.so"
 
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Build APK
+      # ── BUILD 1: VPN Store (client-user.jiangsuhk.com) ───────────────────
+      - name: Build APK — VPN Store
         run: flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=stable
 
-      - name: Upload APK
+      - name: Save VPN Store APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk /tmp/vpnstore-release.apk
+
+      # ── PATCH SOURCE → Beno VPN (benovpn.com) ────────────────────────────
+      - name: Patch source for Beno VPN build
+        run: |
+          set -e
+
+          DART_FILES=(
+            lib/auth/auth_storage.dart
+            lib/auth/login_page.dart
+            lib/common/constant.dart
+            lib/common/preferences.dart
+            lib/providers/action.dart
+          )
+
+          # Domain / URLs
+          sed -i "s|https://client-user\.jiangsuhk\.com|https://benovpn.com|g" "${DART_FILES[@]}"
+          sed -i "s|client-user\.jiangsuhk\.com|benovpn.com|g" "${DART_FILES[@]}"
+
+          # App name
+          sed -i "s|VPN Store|Beno VPN|g" "${DART_FILES[@]}"
+
+          # SharedPreferences token key
+          sed -i "s|vpnstore_token|benovpn_token|g" lib/common/preferences.dart
+
+          # Android applicationId
+          sed -i 's|com\.vpnstore\.meta|com.benovpn.meta|g' android/app/build.gradle.kts
+
+          # Android app labels
+          sed -i 's|android:label="VPN Store"|android:label="Beno VPN"|g' \
+            android/app/src/main/AndroidManifest.xml
+          sed -i 's|VPN Store|Beno VPN|g' \
+            android/common/src/main/res/values/strings.xml
+
+          echo "=== Verifying Beno VPN patch ==="
+          grep -n "benovpn\|Beno VPN" lib/auth/auth_storage.dart lib/common/constant.dart \
+            android/app/build.gradle.kts || true
+
+      # ── BUILD 2: Beno VPN (benovpn.com) ──────────────────────────────────
+      - name: Build APK — Beno VPN
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=stable
+
+      - name: Save Beno VPN APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk /tmp/benovpn-release.apk
+
+      # ── UPLOAD BOTH ARTIFACTS ─────────────────────────────────────────────
+      - name: Upload VPN Store APK
         uses: actions/upload-artifact@v4
         with:
           name: vpnstore-meta-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: /tmp/vpnstore-release.apk
+          overwrite: true
+
+      - name: Upload Beno VPN APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: benovpn-meta-apk
+          path: /tmp/benovpn-release.apk
           overwrite: true

@@ -909,24 +909,54 @@ class ProfilesAction extends _$ProfilesAction {
   }
 
   Future<void> addProfileFormFile() async {
-    final platformFile = await globalState.safeRun(picker.pickerFile);
-    final bytes = platformFile?.bytes;
-    if (bytes == null) return;
-    globalState.navigatorKey.currentState?.popUntil((route) => route.isFirst);
-    ref.read(currentPageLabelProvider.notifier).toProfiles();
-    final profile = await globalState.loadingRun(
-      tag: LoadingTag.profiles,
-      () async {
-        return Profile.normal(label: platformFile?.name).saveFile(bytes);
-      },
-      title: currentAppLocalizations.addProfile,
-    );
-    if (profile != null) {
-      putProfile(profile);
-    }
+    globalState.showNotifier('Vui lòng sử dụng token hoặc link sub từ hệ thống');
   }
 
-  Future<void> addProfileFormURL(String url) async {
+  Future<void> addProfileFormURL(String raw) async {
+    // Extract token from a URL or use raw input as token
+    final String token;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      token = Uri.tryParse(raw)?.queryParameters['token'] ?? '';
+    } else {
+      token = raw.trim();
+    }
+    if (token.isEmpty) {
+      globalState.showNotifier('Token không hợp lệ');
+      return;
+    }
+
+    // Always build URL from our system
+    const _kSubBase = 'https://client-user.jiangsuhk.com';
+    final subUrl = '$_kSubBase/api/v1/client/subscribe?token=$token&flag=clash';
+
+    // Validate token against our system before adding
+    try {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 12);
+      final req = await client.getUrl(Uri.parse(subUrl));
+      req.headers.set('User-Agent', 'clash.meta');
+      final res = await req.close();
+      await res.drain<void>();
+      client.close();
+      if (res.statusCode == 401 ||
+          res.statusCode == 403 ||
+          res.statusCode == 404) {
+        globalState.showNotifier(
+          'Token không có trong hệ thống, vui lòng kiểm tra lại',
+        );
+        return;
+      }
+      if (res.statusCode != 200) {
+        globalState.showNotifier(
+          'Lỗi máy chủ (${res.statusCode}), vui lòng thử lại',
+        );
+        return;
+      }
+    } catch (_) {
+      globalState.showNotifier('Không thể kết nối để xác thực token');
+      return;
+    }
+
     if (globalState.navigatorKey.currentState?.canPop() ?? false) {
       globalState.navigatorKey.currentState?.popUntil((route) => route.isFirst);
     }
@@ -934,7 +964,7 @@ class ProfilesAction extends _$ProfilesAction {
     final profile = await globalState.loadingRun(
       tag: LoadingTag.profiles,
       () async {
-        return Profile.normal(url: url).update();
+        return Profile.normal(url: subUrl).update();
       },
       title: currentAppLocalizations.addProfile,
     );

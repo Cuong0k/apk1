@@ -10,16 +10,10 @@ class AddProfileView extends StatelessWidget {
 
   const AddProfileView({super.key, required this.context});
 
-  Future<void> _handleAddProfileFormFile() async {
+  Future<void> _handleAddProfileFormURL(String raw) async {
     globalState.container
         .read(profilesActionProvider.notifier)
-        .addProfileFormFile();
-  }
-
-  Future<void> _handleAddProfileFormURL(String url) async {
-    globalState.container
-        .read(profilesActionProvider.notifier)
-        .addProfileFormURL(url);
+        .addProfileFormURL(raw);
   }
 
   Future<void> _toScan() async {
@@ -38,50 +32,39 @@ class AddProfileView extends StatelessWidget {
   }
 
   Future<void> _toAdd() async {
-    final appLocalizations = context.appLocalizations;
-    final url = await globalState.showCommonDialog<String>(
+    final value = await globalState.showCommonDialog<String>(
       child: InputDialog(
         autovalidateMode: AutovalidateMode.onUnfocus,
-        title: appLocalizations.importFromURL,
-        labelText: appLocalizations.url,
+        title: 'Nhập token hoặc link sub',
+        labelText: 'Token hoặc Link Sub',
         value: '',
         validator: (value) {
           if (value == null || value.isEmpty) {
-            return appLocalizations.emptyTip('').trim();
-          }
-          if (!value.isUrl) {
-            return appLocalizations.urlTip('').trim();
+            return 'Vui lòng nhập token hoặc link sub';
           }
           return null;
         },
       ),
     );
-    if (url != null) {
-      _handleAddProfileFormURL(url);
+    if (value != null) {
+      _handleAddProfileFormURL(value);
     }
   }
 
   @override
   Widget build(context) {
-    final appLocalizations = context.appLocalizations;
     return ListView(
       children: [
         ListItem(
           leading: const Icon(Icons.qr_code_sharp),
-          title: Text(appLocalizations.qrcode),
-          subtitle: Text(appLocalizations.qrcodeDesc),
+          title: const Text('Quét mã QR'),
+          subtitle: const Text('Quét mã QR từ hệ thống'),
           onTap: _toScan,
         ),
         ListItem(
-          leading: const Icon(Icons.upload_file_sharp),
-          title: Text(appLocalizations.file),
-          subtitle: Text(appLocalizations.fileDesc),
-          onTap: _handleAddProfileFormFile,
-        ),
-        ListItem(
           leading: const Icon(Icons.cloud_download_sharp),
-          title: Text(appLocalizations.url),
-          subtitle: Text(appLocalizations.urlDesc),
+          title: const Text('Token hoặc Link Sub'),
+          subtitle: const Text('Nhập token hoặc link sub từ hệ thống'),
           onTap: _toAdd,
         ),
       ],
@@ -113,35 +96,19 @@ class _URLFormDialogState extends State<URLFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final appLocalizations = context.appLocalizations;
     return CommonDialog(
-      title: appLocalizations.importFromURL,
+      title: 'Nhập token hoặc link sub',
       actions: [
         TextButton(
           onPressed: _handleAddProfileFormURL,
-          child: Text(appLocalizations.submit),
+          child: const Text('Xác nhận'),
         ),
       ],
-      child: SizedBox(
+      child: const SizedBox(
         width: 300,
         child: Wrap(
           runSpacing: 16,
-          children: [
-            TextField(
-              keyboardType: TextInputType.url,
-              minLines: 1,
-              maxLines: 5,
-              onSubmitted: (_) {
-                _handleAddProfileFormURL();
-              },
-              onEditingComplete: _handleAddProfileFormURL,
-              controller: _urlController,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                labelText: appLocalizations.url,
-              ),
-            ),
-          ],
+          children: [],
         ),
       ),
     );

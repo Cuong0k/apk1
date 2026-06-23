@@ -36,7 +36,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     });
     try {
       final clashUrl = AuthStorage.toClashUrl(token);
-      final profile = Profile.normal(url: clashUrl, label: 'VPN Store');
+      // Download and validate subscription before entering app
+      final profile = await Profile.normal(url: clashUrl, label: 'VPN Store').update();
       ref.read(profilesActionProvider.notifier).putProfile(profile);
       await AuthStorage.saveSubUrl(clashUrl);
       if (mounted) widget.onLoginSuccess();
