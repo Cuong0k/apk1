@@ -627,6 +627,7 @@ class _ListHeaderState extends State<ListHeader> {
                     color: context.colorScheme.onSurfaceVariant),
                 padding: EdgeInsets.zero,
                 iconSize: 18,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 onSelected: (value) {
                   if (value == 'edit') _editProfile(context);
                   if (value == 'update') _updateProfile();
