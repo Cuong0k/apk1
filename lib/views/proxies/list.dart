@@ -145,6 +145,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
           group: group,
           subscriptionInfo: hasSubInfo ? profile.subscriptionInfo : null,
           lastUpdateDate: hasSubInfo ? profile.lastUpdateDate : null,
+          profile: hasSubInfo ? profile : null,
           onChange: (String groupName) {
             _handleChange(currentUnfoldSet, groupName);
           },
@@ -178,6 +179,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
     required double headerHeight,
     SubscriptionInfo? subscriptionInfo,
     DateTime? lastUpdateDate,
+    Profile? profile,
   }) {
     final groupName = group.name;
     final isExpand = currentUnfoldSet.contains(groupName);
@@ -192,6 +194,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
         group: group,
         subscriptionInfo: subscriptionInfo,
         lastUpdateDate: lastUpdateDate,
+        profile: profile,
         onChange: (String groupName) {
           _handleChange(currentUnfoldSet, groupName);
         },
@@ -384,6 +387,7 @@ class _ProxiesListViewState extends State<ProxiesListView> {
                                 lastUpdateDate: hasSubInfo
                                     ? profile!.lastUpdateDate
                                     : null,
+                                profile: hasSubInfo ? profile : null,
                               ),
                             ),
                           ),
@@ -410,6 +414,7 @@ class ListHeader extends StatefulWidget {
   final double heightHint;
   final SubscriptionInfo? subscriptionInfo;
   final DateTime? lastUpdateDate;
+  final Profile? profile;
 
   const ListHeader({
     super.key,
@@ -421,6 +426,7 @@ class ListHeader extends StatefulWidget {
     required this.heightHint,
     this.subscriptionInfo,
     this.lastUpdateDate,
+    this.profile,
   });
 
   @override
@@ -446,70 +452,12 @@ class _ListHeaderState extends State<ListHeader> {
     widget.onChange(groupName);
   }
 
-  Widget _buildSubscriptionRow(BuildContext context) {
-    final info = widget.subscriptionInfo;
-    final lastUpdate = widget.lastUpdateDate;
-    if (info == null || info.total == 0) return const SizedBox.shrink();
-
-    final used = info.upload + info.download;
-    final total = info.total;
-    final progress = (used / total).clamp(0.0, 1.0);
-    final usedStr = used.traffic.show;
-    final totalStr = total.traffic.show;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 5,
-                  backgroundColor: context.colorScheme.surfaceContainerHighest,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    context.colorScheme.primary,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              '$usedStr / $totalStr',
-              style: context.textTheme.bodySmall?.copyWith(
-                color: context.colorScheme.onSurfaceVariant,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            if (lastUpdate != null) ...[
-              Text(
-                '${lastUpdate.year}-${lastUpdate.month.toString().padLeft(2, '0')}-${lastUpdate.day.toString().padLeft(2, '0')}',
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: context.colorScheme.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-              ),
-              Text(
-                ' · ${lastUpdate.getLastUpdateTimeDesc(context)}',
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: context.colorScheme.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ],
-    );
+  Future<void> _updateProfile(BuildContext context) async {
+    final profile = widget.profile;
+    if (profile == null) return;
+    globalState.container
+        .read(profilesActionProvider.notifier)
+        .updateProfile(profile, showLoading: true);
   }
 
   @override
@@ -558,64 +506,117 @@ class _ListHeaderState extends State<ListHeader> {
       );
     }
 
-    // Groups with subscription info → full card with progress bar + date
+    // Groups with subscription info → ShadowClash-style card
+    final info = widget.subscriptionInfo!;
+    final lastUpdate = widget.lastUpdateDate;
+    final used = info.upload + info.download;
+    final total = info.total;
+    final progress = total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
+    final usedStr = used.traffic.show;
+    final totalStr = total.traffic.show;
+
     return Container(
       decoration: BoxDecoration(
         color: context.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Row 1: group name (bold, no icons)
+          EmojiText(
+            groupName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Row 2: [progress bar] [usage text] [⊙] [⋮] [^]
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: EmojiText(
-                  groupName,
-                  style: context.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 5,
+                    backgroundColor: context.colorScheme.surfaceContainerHighest,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      context.colorScheme.primary,
+                    ),
                   ),
                 ),
               ),
-              if (isExpand) ...[
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(2),
-                  onPressed: () {
-                    widget.onScrollToSelected(groupName);
-                  },
-                  style: const ButtonStyle(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  iconSize: 18,
-                  icon: const Icon(Icons.adjust),
+              const SizedBox(width: 8),
+              Text(
+                '$usedStr / $totalStr',
+                style: context.textTheme.bodySmall?.copyWith(
+                  color: context.colorScheme.onSurfaceVariant,
+                  fontSize: 11,
                 ),
-                IconButton(
-                  iconSize: 18,
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(2),
-                  onPressed: _delayTest,
-                  style: const ButtonStyle(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              const SizedBox(width: 4),
+              if (isExpand)
+                GestureDetector(
+                  onTap: () => widget.onScrollToSelected(groupName),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.adjust, size: 18,
+                        color: context.colorScheme.onSurfaceVariant),
                   ),
-                  icon: const Icon(Icons.network_ping),
                 ),
-                const SizedBox(width: 2),
-              ] else
-                const SizedBox(width: 2),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, size: 18,
+                    color: context.colorScheme.onSurfaceVariant),
+                padding: EdgeInsets.zero,
+                iconSize: 18,
+                onSelected: (value) {
+                  if (value == 'update') _updateProfile(context);
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'update',
+                    child: Row(
+                      children: [
+                        Icon(Icons.refresh, size: 18,
+                            color: context.colorScheme.onSurface),
+                        const SizedBox(width: 8),
+                        Text('${context.appLocalizations.update} gói',
+                            style: context.textTheme.bodyMedium),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               GestureDetector(
                 onTap: () => _handleChange(groupName),
-                child: Icon(
-                  isExpand ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                  size: 22,
-                  color: context.colorScheme.onSurfaceVariant,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    isExpand ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    size: 20,
+                    color: context.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],
           ),
-          _buildSubscriptionRow(context),
+          // Row 3: date · time ago
+          if (lastUpdate != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${lastUpdate.year}-${lastUpdate.month.toString().padLeft(2, '0')}-${lastUpdate.day.toString().padLeft(2, '0')} · ${lastUpdate.getLastUpdateTimeDesc(context)}',
+              style: context.textTheme.bodySmall?.copyWith(
+                color: context.colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
+            ),
+          ],
         ],
       ),
     );
