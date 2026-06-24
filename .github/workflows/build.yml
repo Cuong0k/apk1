@@ -179,6 +179,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: false
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -188,6 +197,22 @@ jobs:
 
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
+
+      # flutter build windows triggers a CMake hook (buildkit.cmake) that
+      # builds the Go core (FlClashCore.exe) and the Rust helper service —
+      # it needs core/Clash.Meta (the mihomo source) vendored first, same
+      # as the Android job's libclash.so build.
+      - name: Fetch mihomo source (core/Clash.Meta)
+        shell: bash
+        run: |
+          set -e
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git clone --depth=1 https://github.com/chen08209/FlClash.git /tmp/flclash
+          cd /tmp/flclash
+          git submodule update --init --depth=1 core/Clash.Meta
+          cd -
+          rm -rf ./core/Clash.Meta
+          cp -r /tmp/flclash/core/Clash.Meta ./core/Clash.Meta
 
       - name: Get Flutter dependencies
         run: flutter pub get
