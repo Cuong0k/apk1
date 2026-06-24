@@ -171,3 +171,78 @@ jobs:
           name: benovpn-meta-apk
           path: /tmp/benovpn-release.apk
           overwrite: true
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.9
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      # ── BUILD 1: VPN Store (client-user.jiangsuhk.com) ───────────────────
+      - name: Build Windows — VPN Store
+        run: |
+          flutter build windows --release --dart-define=APP_ENV=stable `
+            --obfuscate --split-debug-info=build/debug-info/vpnstore
+
+      - name: Zip VPN Store build
+        run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "vpnstore-windows.zip"
+
+      # ── PATCH SOURCE → Beno VPN (benovpn.com) ────────────────────────────
+      - name: Patch source for Beno VPN build
+        shell: bash
+        run: |
+          set -e
+
+          DART_FILES=(
+            lib/auth/auth_storage.dart
+            lib/auth/login_page.dart
+            lib/common/constant.dart
+            lib/common/preferences.dart
+            lib/providers/action.dart
+            lib/pages/token_login.dart
+          )
+
+          sed -i "s|https://client-user\.jiangsuhk\.com|https://benovpn.com|g" "${DART_FILES[@]}"
+          sed -i "s|client-user\.jiangsuhk\.com|benovpn.com|g" "${DART_FILES[@]}"
+          sed -i "s|VPN Store|Beno VPN|g" "${DART_FILES[@]}"
+          sed -i "s|vpnstore_token|benovpn_token|g" lib/common/preferences.dart
+
+      # ── BUILD 2: Beno VPN (benovpn.com) ──────────────────────────────────
+      - name: Build Windows — Beno VPN
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build windows --release --dart-define=APP_ENV=stable `
+            --obfuscate --split-debug-info=build/debug-info/benovpn
+
+      - name: Zip Beno VPN build
+        run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "benovpn-windows.zip"
+
+      # ── UPLOAD BOTH ARTIFACTS ─────────────────────────────────────────────
+      - name: Upload VPN Store Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpnstore-meta-windows
+          path: vpnstore-windows.zip
+          overwrite: true
+
+      - name: Upload Beno VPN Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: benovpn-meta-windows
+          path: benovpn-windows.zip
+          overwrite: true
