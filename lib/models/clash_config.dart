@@ -550,7 +550,7 @@ abstract class PatchClashConfig with _$PatchClashConfig {
     @Default(0) @JsonKey(name: 'port') int port,
     @Default(0) @JsonKey(name: 'redir-port') int redirPort,
     @Default(0) @JsonKey(name: 'tproxy-port') int tproxyPort,
-    @Default(Mode.global) Mode mode,
+    @Default(Mode.rule) Mode mode,
     @Default(false) @JsonKey(name: 'allow-lan') bool allowLan,
     @Default(LogLevel.error) @JsonKey(name: 'log-level') LogLevel logLevel,
     @Default(false) bool ipv6,
