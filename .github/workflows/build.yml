@@ -118,6 +118,7 @@ jobs:
             lib/common/constant.dart
             lib/common/preferences.dart
             lib/providers/action.dart
+            lib/pages/token_login.dart
           )
 
           # Domain / URLs

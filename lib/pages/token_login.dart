@@ -14,7 +14,7 @@ const _kSubBase = 'https://client-user.jiangsuhk.com';
 const _kValidHost = 'client-user.jiangsuhk.com';
 
 String _subUrl(String token) =>
-    '$_kSubBase/api/v1/client/subscribe?token=$token&flag=clash';
+    '$_kSubBase/api/v1/client/subscribe?token=$token&flag=clashmeta';
 
 // Extract the raw token from whatever the user pasted (URL or plain text)
 String _extractToken(String raw) {
