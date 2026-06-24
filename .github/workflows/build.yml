@@ -102,7 +102,9 @@ jobs:
 
       # ── BUILD 1: VPN Store (client-user.jiangsuhk.com) ───────────────────
       - name: Build APK — VPN Store
-        run: flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=stable
+        run: |
+          flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=stable \
+            --obfuscate --split-debug-info=build/debug-info/vpnstore
 
       - name: Save VPN Store APK
         run: cp build/app/outputs/flutter-apk/app-release.apk /tmp/vpnstore-release.apk
@@ -149,7 +151,8 @@ jobs:
         run: |
           flutter clean
           flutter pub get
-          flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=stable
+          flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=stable \
+            --obfuscate --split-debug-info=build/debug-info/benovpn
 
       - name: Save Beno VPN APK
         run: cp build/app/outputs/flutter-apk/app-release.apk /tmp/benovpn-release.apk
