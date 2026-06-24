@@ -109,7 +109,7 @@ jobs:
       - name: Save VPN Store APK
         run: cp build/app/outputs/flutter-apk/app-release.apk /tmp/vpnstore-release.apk
 
-      # ── PATCH SOURCE → Beno VPN (benovpn.com) ────────────────────────────
+      # ── PATCH SOURCE → Beno VPN (brand: Beno VPN, API: client.qingniaows.com) ──
       - name: Patch source for Beno VPN build
         run: |
           set -e
@@ -123,9 +123,9 @@ jobs:
             lib/pages/token_login.dart
           )
 
-          # Domain / URLs
-          sed -i "s|https://client-user\.jiangsuhk\.com|https://benovpn.com|g" "${DART_FILES[@]}"
-          sed -i "s|client-user\.jiangsuhk\.com|benovpn.com|g" "${DART_FILES[@]}"
+          # Domain / URLs — actual API endpoint is client.qingniaows.com
+          sed -i "s|https://client-user\.jiangsuhk\.com|https://client.qingniaows.com|g" "${DART_FILES[@]}"
+          sed -i "s|client-user\.jiangsuhk\.com|client.qingniaows.com|g" "${DART_FILES[@]}"
 
           # App name
           sed -i "s|VPN Store|Beno VPN|g" "${DART_FILES[@]}"
@@ -226,7 +226,7 @@ jobs:
       - name: Zip VPN Store build
         run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "vpnstore-windows.zip"
 
-      # ── PATCH SOURCE → Beno VPN (benovpn.com) ────────────────────────────
+      # ── PATCH SOURCE → Beno VPN (brand: Beno VPN, API: client.qingniaows.com) ──
       - name: Patch source for Beno VPN build
         shell: bash
         run: |
@@ -241,8 +241,8 @@ jobs:
             lib/pages/token_login.dart
           )
 
-          sed -i "s|https://client-user\.jiangsuhk\.com|https://benovpn.com|g" "${DART_FILES[@]}"
-          sed -i "s|client-user\.jiangsuhk\.com|benovpn.com|g" "${DART_FILES[@]}"
+          sed -i "s|https://client-user\.jiangsuhk\.com|https://client.qingniaows.com|g" "${DART_FILES[@]}"
+          sed -i "s|client-user\.jiangsuhk\.com|client.qingniaows.com|g" "${DART_FILES[@]}"
           sed -i "s|VPN Store|Beno VPN|g" "${DART_FILES[@]}"
           sed -i "s|vpnstore_token|benovpn_token|g" lib/common/preferences.dart
 
