@@ -3,10 +3,13 @@ import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:fl_clash/common/common.dart';
+import 'package:fl_clash/core/core.dart';
+import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -105,6 +108,9 @@ class _TokenLoginPageState extends State<TokenLoginPage> {
       try {
         final profile = await Profile.normal(url: subUrl).update();
         container.read(profilesActionProvider.notifier).putProfile(profile);
+        if (mounted) {
+          await _pickDefaultGroup(container, profile.id);
+        }
       } catch (_) {
         // Profile update failed (bad YAML?), but token is saved — user can refresh later
       }
@@ -115,6 +121,52 @@ class _TokenLoginPageState extends State<TokenLoginPage> {
         _loading = false;
         _error = 'Không thể kết nối. Kiểm tra mạng và thử lại.';
       });
+    }
+  }
+
+  // Let the user choose which proxy (rule) group becomes the active default,
+  // instead of silently falling back to whichever group happens to be first.
+  Future<void> _pickDefaultGroup(
+    ProviderContainer container,
+    int profileId,
+  ) async {
+    List<String> groupNames = [];
+    try {
+      final config = await coreController.getConfig(profileId);
+      final rawGroups = (config['proxy-groups'] as List?) ?? [];
+      for (final raw in rawGroups) {
+        final group = raw as Map;
+        final type = group['type'] as String?;
+        final name = group['name'] as String?;
+        if (type == null || name == null) continue;
+        try {
+          GroupType.parse(type);
+          groupNames.add(name);
+        } catch (_) {
+          continue;
+        }
+      }
+    } catch (_) {
+      return;
+    }
+    if (groupNames.length < 2 || !mounted) return;
+    final chosen = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Chọn nhóm Quy tắc làm mặc định'),
+        children: groupNames
+            .map(
+              (name) => SimpleDialogOption(
+                onPressed: () => Navigator.of(ctx).pop(name),
+                child: Text(name),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (chosen != null) {
+      container.read(proxiesActionProvider.notifier).updateCurrentGroupName(chosen);
     }
   }
 
