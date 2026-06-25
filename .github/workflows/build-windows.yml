@@ -90,29 +90,29 @@ jobs:
       - name: Build VPN Store installer
         run: |
           $iss = @'
-[Setup]
-AppName=VPN Store
-AppVersion=1.0.0
-DefaultDirName={autopf}\VPN Store
-DefaultGroupName=VPN Store
-OutputDir=.
-OutputBaseFilename=vpnstore-windows-setup
-Compression=lzma2
-SolidCompression=yes
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
-DisableProgramGroupPage=yes
-
-[Files]
-Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-
-[Icons]
-Name: "{group}\VPN Store"; Filename: "{app}\FlClash.exe"
-Name: "{autodesktop}\VPN Store"; Filename: "{app}\FlClash.exe"
-
-[Run]
-Filename: "{app}\FlClash.exe"; Description: "Launch VPN Store"; Flags: nowait postinstall skipifsilent
-'@
+          [Setup]
+          AppName=VPN Store
+          AppVersion=1.0.0
+          DefaultDirName={autopf}\VPN Store
+          DefaultGroupName=VPN Store
+          OutputDir=.
+          OutputBaseFilename=vpnstore-windows-setup
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          DisableProgramGroupPage=yes
+          
+          [Files]
+          Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+          
+          [Icons]
+          Name: "{group}\VPN Store"; Filename: "{app}\FlClash.exe"
+          Name: "{autodesktop}\VPN Store"; Filename: "{app}\FlClash.exe"
+          
+          [Run]
+          Filename: "{app}\FlClash.exe"; Description: "Launch VPN Store"; Flags: nowait postinstall skipifsilent
+          '@
           Set-Content -Path vpnstore.iss -Value $iss -Encoding UTF8
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" vpnstore.iss
 
@@ -150,29 +150,29 @@ Filename: "{app}\FlClash.exe"; Description: "Launch VPN Store"; Flags: nowait po
       - name: Build Beno VPN installer
         run: |
           $iss = @'
-[Setup]
-AppName=Beno VPN
-AppVersion=1.0.0
-DefaultDirName={autopf}\Beno VPN
-DefaultGroupName=Beno VPN
-OutputDir=.
-OutputBaseFilename=benovpn-windows-setup
-Compression=lzma2
-SolidCompression=yes
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
-DisableProgramGroupPage=yes
-
-[Files]
-Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-
-[Icons]
-Name: "{group}\Beno VPN"; Filename: "{app}\FlClash.exe"
-Name: "{autodesktop}\Beno VPN"; Filename: "{app}\FlClash.exe"
-
-[Run]
-Filename: "{app}\FlClash.exe"; Description: "Launch Beno VPN"; Flags: nowait postinstall skipifsilent
-'@
+          [Setup]
+          AppName=Beno VPN
+          AppVersion=1.0.0
+          DefaultDirName={autopf}\Beno VPN
+          DefaultGroupName=Beno VPN
+          OutputDir=.
+          OutputBaseFilename=benovpn-windows-setup
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          DisableProgramGroupPage=yes
+          
+          [Files]
+          Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+          
+          [Icons]
+          Name: "{group}\Beno VPN"; Filename: "{app}\FlClash.exe"
+          Name: "{autodesktop}\Beno VPN"; Filename: "{app}\FlClash.exe"
+          
+          [Run]
+          Filename: "{app}\FlClash.exe"; Description: "Launch Beno VPN"; Flags: nowait postinstall skipifsilent
+          '@
           Set-Content -Path benovpn.iss -Value $iss -Encoding UTF8
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" benovpn.iss
 
