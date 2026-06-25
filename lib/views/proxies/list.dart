@@ -16,6 +16,13 @@ import 'common.dart';
 
 typedef GroupNameProxiesMap = Map<String, List<Proxy>>;
 
+String _formatExpireDate(int expireSeconds) {
+  final date = DateTime.fromMillisecondsSinceEpoch(expireSeconds * 1000);
+  final dd = date.day.toString().padLeft(2, '0');
+  final mm = date.month.toString().padLeft(2, '0');
+  return '$dd-$mm-${date.year}';
+}
+
 class ProxiesListView extends StatefulWidget {
   const ProxiesListView({super.key});
 
@@ -706,11 +713,13 @@ class _ListHeaderState extends State<ListHeader> {
               ),
             ],
           ),
-          // Row 3: date · time ago
+          // Row 3: expiry date · update time ago
           if (lastUpdate != null) ...[
             const SizedBox(height: 4),
             Text(
-              '${lastUpdate.year}-${lastUpdate.month.toString().padLeft(2, '0')}-${lastUpdate.day.toString().padLeft(2, '0')} · ${lastUpdate.getLastUpdateTimeDesc(context)}',
+              info.expire > 0
+                  ? 'Hạn sử dụng ${_formatExpireDate(info.expire)} · ${lastUpdate.getLastUpdateTimeDesc(context)}'
+                  : '${lastUpdate.year}-${lastUpdate.month.toString().padLeft(2, '0')}-${lastUpdate.day.toString().padLeft(2, '0')} · ${lastUpdate.getLastUpdateTimeDesc(context)}',
               style: context.textTheme.bodySmall?.copyWith(
                 color: context.colorScheme.onSurfaceVariant,
                 fontSize: 11,

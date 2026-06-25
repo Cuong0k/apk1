@@ -105,10 +105,6 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
     );
   }
 
-  void _onSearch(String value) {
-    ref.read(queryProvider(QueryTag.proxies).notifier).value = value;
-  }
-
   Widget _buildVpnRow() {
     return Consumer(
       builder: (context, ref, _) {
@@ -419,7 +415,6 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
       resizeToAvoidBottomInset: false,
       actions: _buildActions(context),
       title: appName,
-      searchState: AppBarSearchState(onSearch: _onSearch),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
