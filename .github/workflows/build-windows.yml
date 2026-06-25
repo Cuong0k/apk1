@@ -72,10 +72,15 @@ jobs:
           echo "CORE_SHA256=$sha" >> "$GITHUB_ENV"
 
       # ── BUILD 1: VPN Store (client-user.jiangsuhk.com) ───────────────────
+      # No --obfuscate here: Windows Defender heuristics flag unsigned,
+      # obfuscated executables that do TUN/proxy networking far more
+      # aggressively than plain ones, and have been observed quarantining
+      # the whole extracted build folder. APK keeps obfuscation since it
+      # hasn't triggered this on Android.
       - name: Build Windows — VPN Store
         run: |
           flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
-            --obfuscate --split-debug-info=build/debug-info/vpnstore
+            --split-debug-info=build/debug-info/vpnstore
 
       - name: Zip VPN Store build
         run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "vpnstore-windows.zip"
@@ -109,7 +114,7 @@ jobs:
           flutter clean
           flutter pub get
           flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
-            --obfuscate --split-debug-info=build/debug-info/benovpn
+            --split-debug-info=build/debug-info/benovpn
 
       - name: Zip Beno VPN build
         run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "benovpn-windows.zip"
