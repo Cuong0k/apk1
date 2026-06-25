@@ -82,18 +82,39 @@ jobs:
           flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
             --split-debug-info=build/debug-info/vpnstore
 
-      # Package the Release folder as a single self-extracting .exe (7-Zip
-      # SFX) instead of a .zip — double-click extracts to a folder and
-      # launches FlClash.exe automatically.
-      - name: Build VPN Store self-extracting exe
+      # Package the Release folder as a real installer (Inno Setup, already
+      # present on windows-latest runners) — install wizard, Start
+      # Menu/Desktop shortcuts, uninstaller in Add/Remove Programs. The
+      # earlier 7-Zip SFX approach only extracted loose files into the
+      # current folder and couldn't reliably auto-launch the app.
+      - name: Build VPN Store installer
         run: |
-          $root = Get-Location
-          Push-Location "build\windows\x64\runner\Release"
-          & "C:\Program Files\7-Zip\7z.exe" a -t7z "$root\vpnstore.7z" *
-          Pop-Location
-          $config = ";!@Install@!UTF-8!`r`nTitle=`"VPN Store`"`r`nRunProgram=`"FlClash.exe`"`r`n;!@InstallEnd@!`r`n"
-          [System.IO.File]::WriteAllText("vpnstore-config.txt", $config, [System.Text.Encoding]::UTF8)
-          cmd /c copy /b "C:\Program Files\7-Zip\7z.sfx" + vpnstore-config.txt + vpnstore.7z vpnstore-windows.exe
+          $iss = @'
+[Setup]
+AppName=VPN Store
+AppVersion=1.0.0
+DefaultDirName={autopf}\VPN Store
+DefaultGroupName=VPN Store
+OutputDir=.
+OutputBaseFilename=vpnstore-windows-setup
+Compression=lzma2
+SolidCompression=yes
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+DisableProgramGroupPage=yes
+
+[Files]
+Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+
+[Icons]
+Name: "{group}\VPN Store"; Filename: "{app}\FlClash.exe"
+Name: "{autodesktop}\VPN Store"; Filename: "{app}\FlClash.exe"
+
+[Run]
+Filename: "{app}\FlClash.exe"; Description: "Launch VPN Store"; Flags: nowait postinstall skipifsilent
+'@
+          Set-Content -Path vpnstore.iss -Value $iss -Encoding UTF8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" vpnstore.iss
 
       # ── PATCH SOURCE → Beno VPN (brand: Beno VPN, API: client.qingniaows.com) ──
       - name: Patch source for Beno VPN build
@@ -126,27 +147,46 @@ jobs:
           flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
             --split-debug-info=build/debug-info/benovpn
 
-      - name: Build Beno VPN self-extracting exe
+      - name: Build Beno VPN installer
         run: |
-          $root = Get-Location
-          Push-Location "build\windows\x64\runner\Release"
-          & "C:\Program Files\7-Zip\7z.exe" a -t7z "$root\benovpn.7z" *
-          Pop-Location
-          $config = ";!@Install@!UTF-8!`r`nTitle=`"Beno VPN`"`r`nRunProgram=`"FlClash.exe`"`r`n;!@InstallEnd@!`r`n"
-          [System.IO.File]::WriteAllText("benovpn-config.txt", $config, [System.Text.Encoding]::UTF8)
-          cmd /c copy /b "C:\Program Files\7-Zip\7z.sfx" + benovpn-config.txt + benovpn.7z benovpn-windows.exe
+          $iss = @'
+[Setup]
+AppName=Beno VPN
+AppVersion=1.0.0
+DefaultDirName={autopf}\Beno VPN
+DefaultGroupName=Beno VPN
+OutputDir=.
+OutputBaseFilename=benovpn-windows-setup
+Compression=lzma2
+SolidCompression=yes
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+DisableProgramGroupPage=yes
+
+[Files]
+Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+
+[Icons]
+Name: "{group}\Beno VPN"; Filename: "{app}\FlClash.exe"
+Name: "{autodesktop}\Beno VPN"; Filename: "{app}\FlClash.exe"
+
+[Run]
+Filename: "{app}\FlClash.exe"; Description: "Launch Beno VPN"; Flags: nowait postinstall skipifsilent
+'@
+          Set-Content -Path benovpn.iss -Value $iss -Encoding UTF8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" benovpn.iss
 
       # ── UPLOAD BOTH ARTIFACTS ─────────────────────────────────────────────
       - name: Upload VPN Store Windows build
         uses: actions/upload-artifact@v4
         with:
           name: vpnstore-meta-windows
-          path: vpnstore-windows.exe
+          path: vpnstore-windows-setup.exe
           overwrite: true
 
       - name: Upload Beno VPN Windows build
         uses: actions/upload-artifact@v4
         with:
           name: benovpn-meta-windows
-          path: benovpn-windows.exe
+          path: benovpn-windows-setup.exe
           overwrite: true
