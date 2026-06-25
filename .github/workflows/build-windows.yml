@@ -1,0 +1,130 @@
+name: Build Windows App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: false
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.9
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      # flutter build windows triggers a CMake hook (buildkit.cmake) that
+      # builds the Go core (FlClashCore.exe) and the Rust helper service —
+      # it needs core/Clash.Meta (the mihomo source) vendored first, same
+      # as the Android job's libclash.so build.
+      - name: Fetch mihomo source (core/Clash.Meta)
+        shell: bash
+        run: |
+          set -e
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git clone --depth=1 https://github.com/chen08209/FlClash.git /tmp/flclash
+          cd /tmp/flclash
+          git submodule update --init --depth=1 core/Clash.Meta
+          cd -
+          rm -rf ./core/Clash.Meta
+          cp -r /tmp/flclash/core/Clash.Meta ./core/Clash.Meta
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      # Build the Go core + Rust helper service ourselves (release mode) so
+      # we can compute CORE_SHA256 and pass it to flutter build below. The
+      # Rust helper embeds this hash as its auth token; if the Flutter app
+      # doesn't embed the same hash via --dart-define, the app can't
+      # authenticate with the helper and the VPN/core never starts —
+      # plain `flutter build windows` alone leaves this dart-define empty.
+      - name: Build Go core + Rust helper (compute CORE_SHA256)
+        shell: bash
+        run: |
+          set -e
+          cd plugins/setup/buildkit/build_tool
+          dart pub get
+          dart run bin/build_tool.dart windows --root-dir "$GITHUB_WORKSPACE"
+
+      - name: Read CORE_SHA256
+        shell: bash
+        run: |
+          set -e
+          sha=$(grep -o '"CORE_SHA256"[^,}]*' core_sha256.json | sed -E 's/.*: *"([^"]+)"/\1/')
+          test -n "$sha"
+          echo "CORE_SHA256=$sha" >> "$GITHUB_ENV"
+
+      # ── BUILD 1: VPN Store (client-user.jiangsuhk.com) ───────────────────
+      - name: Build Windows — VPN Store
+        run: |
+          flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
+            --obfuscate --split-debug-info=build/debug-info/vpnstore
+
+      - name: Zip VPN Store build
+        run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "vpnstore-windows.zip"
+
+      # ── PATCH SOURCE → Beno VPN (brand: Beno VPN, API: client.qingniaows.com) ──
+      - name: Patch source for Beno VPN build
+        shell: bash
+        run: |
+          set -e
+
+          DART_FILES=(
+            lib/auth/auth_storage.dart
+            lib/auth/login_page.dart
+            lib/common/constant.dart
+            lib/common/preferences.dart
+            lib/providers/action.dart
+            lib/pages/token_login.dart
+          )
+
+          sed -i "s|https://client-user\.jiangsuhk\.com|https://client.qingniaows.com|g" "${DART_FILES[@]}"
+          sed -i "s|client-user\.jiangsuhk\.com|client.qingniaows.com|g" "${DART_FILES[@]}"
+          sed -i "s|VPN Store|Beno VPN|g" "${DART_FILES[@]}"
+          sed -i "s|vpnstore_token|benovpn_token|g" lib/common/preferences.dart
+
+      # ── BUILD 2: Beno VPN (benovpn.com) ──────────────────────────────────
+      # flutter clean only wipes build/ and .dart_tool/ — the Go core/Rust
+      # helper binaries live in libclash/windows/ at the project root and
+      # are untouched, so CORE_SHA256 from the earlier step is still valid.
+      - name: Build Windows — Beno VPN
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
+            --obfuscate --split-debug-info=build/debug-info/benovpn
+
+      - name: Zip Beno VPN build
+        run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "benovpn-windows.zip"
+
+      # ── UPLOAD BOTH ARTIFACTS ─────────────────────────────────────────────
+      - name: Upload VPN Store Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpnstore-meta-windows
+          path: vpnstore-windows.zip
+          overwrite: true
+
+      - name: Upload Beno VPN Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: benovpn-meta-windows
+          path: benovpn-windows.zip
+          overwrite: true
