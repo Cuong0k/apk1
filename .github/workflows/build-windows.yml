@@ -87,7 +87,10 @@ jobs:
       # launches FlClash.exe automatically.
       - name: Build VPN Store self-extracting exe
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" a -t7z vpnstore.7z "build\windows\x64\runner\Release\*"
+          $root = Get-Location
+          Push-Location "build\windows\x64\runner\Release"
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z "$root\vpnstore.7z" *
+          Pop-Location
           $config = ";!@Install@!UTF-8!`r`nTitle=`"VPN Store`"`r`nRunProgram=`"FlClash.exe`"`r`n;!@InstallEnd@!`r`n"
           [System.IO.File]::WriteAllText("vpnstore-config.txt", $config, [System.Text.Encoding]::UTF8)
           cmd /c copy /b "C:\Program Files\7-Zip\7z.sfx" + vpnstore-config.txt + vpnstore.7z vpnstore-windows.exe
@@ -125,7 +128,10 @@ jobs:
 
       - name: Build Beno VPN self-extracting exe
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" a -t7z benovpn.7z "build\windows\x64\runner\Release\*"
+          $root = Get-Location
+          Push-Location "build\windows\x64\runner\Release"
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z "$root\benovpn.7z" *
+          Pop-Location
           $config = ";!@Install@!UTF-8!`r`nTitle=`"Beno VPN`"`r`nRunProgram=`"FlClash.exe`"`r`n;!@InstallEnd@!`r`n"
           [System.IO.File]::WriteAllText("benovpn-config.txt", $config, [System.Text.Encoding]::UTF8)
           cmd /c copy /b "C:\Program Files\7-Zip\7z.sfx" + benovpn-config.txt + benovpn.7z benovpn-windows.exe
