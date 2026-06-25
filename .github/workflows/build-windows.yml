@@ -30,6 +30,15 @@ jobs:
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
 
+      # Flutter Windows release builds need the VC++ runtime DLLs
+      # (vcruntime140.dll, msvcp140.dll, ...) which aren't bundled in the
+      # Release output. Dev/build machines already have them (Visual
+      # Studio installs them), so this only breaks on a clean end-user PC
+      # — exactly the "installs fine but app won't open" symptom. Bundle
+      # the official redistributable and silent-install it from the setup.
+      - name: Download VC++ Redistributable
+        run: Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe"
+
       # flutter build windows triggers a CMake hook (buildkit.cmake) that
       # builds the Go core (FlClashCore.exe) and the Rust helper service —
       # it needs core/Clash.Meta (the mihomo source) vendored first, same
@@ -105,12 +114,14 @@ jobs:
           
           [Files]
           Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-          
+          Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
+
           [Icons]
           Name: "{group}\VPN Store"; Filename: "{app}\FlClash.exe"
           Name: "{autodesktop}\VPN Store"; Filename: "{app}\FlClash.exe"
-          
+
           [Run]
+          Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing required components..."; Flags: waituntilterminated
           Filename: "{app}\FlClash.exe"; Description: "Launch VPN Store"; Flags: nowait postinstall skipifsilent
           '@
           Set-Content -Path vpnstore.iss -Value $iss -Encoding UTF8
@@ -165,12 +176,14 @@ jobs:
           
           [Files]
           Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-          
+          Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
+
           [Icons]
           Name: "{group}\Beno VPN"; Filename: "{app}\FlClash.exe"
           Name: "{autodesktop}\Beno VPN"; Filename: "{app}\FlClash.exe"
-          
+
           [Run]
+          Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing required components..."; Flags: waituntilterminated
           Filename: "{app}\FlClash.exe"; Description: "Launch Beno VPN"; Flags: nowait postinstall skipifsilent
           '@
           Set-Content -Path benovpn.iss -Value $iss -Encoding UTF8
