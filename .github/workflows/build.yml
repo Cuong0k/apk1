@@ -217,10 +217,32 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      # Build the Go core + Rust helper service ourselves (release mode) so
+      # we can compute CORE_SHA256 and pass it to flutter build below. The
+      # Rust helper embeds this hash as its auth token; if the Flutter app
+      # doesn't embed the same hash via --dart-define, the app can't
+      # authenticate with the helper and the VPN/core never starts —
+      # plain `flutter build windows` alone leaves this dart-define empty.
+      - name: Build Go core + Rust helper (compute CORE_SHA256)
+        shell: bash
+        run: |
+          set -e
+          cd plugins/setup/buildkit/build_tool
+          dart pub get
+          dart run bin/build_tool.dart windows --root-dir "$GITHUB_WORKSPACE"
+
+      - name: Read CORE_SHA256
+        shell: bash
+        run: |
+          set -e
+          sha=$(grep -o '"CORE_SHA256"[^,}]*' core_sha256.json | sed -E 's/.*: *"([^"]+)"/\1/')
+          test -n "$sha"
+          echo "CORE_SHA256=$sha" >> "$GITHUB_ENV"
+
       # ── BUILD 1: VPN Store (client-user.jiangsuhk.com) ───────────────────
       - name: Build Windows — VPN Store
         run: |
-          flutter build windows --release --dart-define=APP_ENV=stable `
+          flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
             --obfuscate --split-debug-info=build/debug-info/vpnstore
 
       - name: Zip VPN Store build
@@ -247,11 +269,14 @@ jobs:
           sed -i "s|vpnstore_token|benovpn_token|g" lib/common/preferences.dart
 
       # ── BUILD 2: Beno VPN (benovpn.com) ──────────────────────────────────
+      # flutter clean only wipes build/ and .dart_tool/ — the Go core/Rust
+      # helper binaries live in libclash/windows/ at the project root and
+      # are untouched, so CORE_SHA256 from the earlier step is still valid.
       - name: Build Windows — Beno VPN
         run: |
           flutter clean
           flutter pub get
-          flutter build windows --release --dart-define=APP_ENV=stable `
+          flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
             --obfuscate --split-debug-info=build/debug-info/benovpn
 
       - name: Zip Beno VPN build

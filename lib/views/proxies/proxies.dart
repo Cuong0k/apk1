@@ -118,8 +118,18 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
             (s) => s?.label.isNotEmpty == true ? s!.label : s?.id.toString() ?? '',
           ),
         );
+        final mode = ref.watch(
+          patchClashConfigProvider.select((s) => s.mode),
+        );
+        final currentGroupName = ref.watch(
+          currentProfileProvider.select((s) => s?.currentGroupName),
+        );
         final selectedServer = ref.watch(
-          selectedProxyNameProvider(GroupName.GLOBAL.name),
+          selectedProxyNameProvider(
+            mode == Mode.global
+                ? GroupName.GLOBAL.name
+                : (currentGroupName ?? GroupName.GLOBAL.name),
+          ),
         );
         return Container(
           padding: EdgeInsets.symmetric(horizontal: 16.ap, vertical: 4),
