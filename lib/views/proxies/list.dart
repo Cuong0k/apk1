@@ -16,8 +16,12 @@ import 'common.dart';
 
 typedef GroupNameProxiesMap = Map<String, List<Proxy>>;
 
-String _formatExpireDate(int expireSeconds) {
+String _formatExpireLabel(int expireSeconds) {
+  // V2board-style panels signal an unlimited/permanent plan either by
+  // expire=0 or by a far-future timestamp (commonly year 2099+).
+  if (expireSeconds <= 0) return 'Vĩnh viễn';
   final date = DateTime.fromMillisecondsSinceEpoch(expireSeconds * 1000);
+  if (date.year >= 2099) return 'Vĩnh viễn';
   final dd = date.day.toString().padLeft(2, '0');
   final mm = date.month.toString().padLeft(2, '0');
   return '$dd-$mm-${date.year}';
@@ -713,13 +717,11 @@ class _ListHeaderState extends State<ListHeader> {
               ),
             ],
           ),
-          // Row 3: expiry date · update time ago
+          // Row 3: expiry (date or "Vĩnh viễn") · update time ago
           if (lastUpdate != null) ...[
             const SizedBox(height: 4),
             Text(
-              info.expire > 0
-                  ? 'Hạn sử dụng ${_formatExpireDate(info.expire)} · ${lastUpdate.getLastUpdateTimeDesc(context)}'
-                  : '${lastUpdate.year}-${lastUpdate.month.toString().padLeft(2, '0')}-${lastUpdate.day.toString().padLeft(2, '0')} · ${lastUpdate.getLastUpdateTimeDesc(context)}',
+              'Hạn sử dụng ${_formatExpireLabel(info.expire)} · ${lastUpdate.getLastUpdateTimeDesc(context)}',
               style: context.textTheme.bodySmall?.copyWith(
                 color: context.colorScheme.onSurfaceVariant,
                 fontSize: 11,
