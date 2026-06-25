@@ -6,6 +6,7 @@ import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -38,6 +39,10 @@ class _TokenLoginPageState extends State<TokenLoginPage> {
   final _ctrl = TextEditingController();
   bool _loading = false;
   String? _error;
+
+  // QR scanning needs a camera — desktop builds (Windows/macOS/Linux) skip it.
+  bool get _supportsQrScan =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   @override
   void dispose() {
@@ -143,7 +148,9 @@ class _TokenLoginPageState extends State<TokenLoginPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Nhập token kích hoạt hoặc quét mã QR để sử dụng ứng dụng',
+                  _supportsQrScan
+                      ? 'Nhập token kích hoạt hoặc quét mã QR để sử dụng ứng dụng'
+                      : 'Nhập token kích hoạt để sử dụng ứng dụng',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
@@ -163,18 +170,20 @@ class _TokenLoginPageState extends State<TokenLoginPage> {
                   ),
                   onSubmitted: (_) => _confirm(),
                 ),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: _loading ? null : _scanQr,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Quét mã QR'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                if (_supportsQrScan) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _loading ? null : _scanQr,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Quét mã QR'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
-                ),
+                ],
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: _loading ? null : _confirm,
