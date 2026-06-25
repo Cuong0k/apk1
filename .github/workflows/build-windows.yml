@@ -82,8 +82,15 @@ jobs:
           flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
             --split-debug-info=build/debug-info/vpnstore
 
-      - name: Zip VPN Store build
-        run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "vpnstore-windows.zip"
+      # Package the Release folder as a single self-extracting .exe (7-Zip
+      # SFX) instead of a .zip — double-click extracts to a folder and
+      # launches FlClash.exe automatically.
+      - name: Build VPN Store self-extracting exe
+        run: |
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z vpnstore.7z "build\windows\x64\runner\Release\*"
+          $config = ";!@Install@!UTF-8!`r`nTitle=`"VPN Store`"`r`nRunProgram=`"FlClash.exe`"`r`n;!@InstallEnd@!`r`n"
+          [System.IO.File]::WriteAllText("vpnstore-config.txt", $config, [System.Text.Encoding]::UTF8)
+          cmd /c copy /b "C:\Program Files\7-Zip\7z.sfx" + vpnstore-config.txt + vpnstore.7z vpnstore-windows.exe
 
       # ── PATCH SOURCE → Beno VPN (brand: Beno VPN, API: client.qingniaows.com) ──
       - name: Patch source for Beno VPN build
@@ -116,20 +123,24 @@ jobs:
           flutter build windows --release --dart-define=APP_ENV=stable --dart-define=CORE_SHA256=${{ env.CORE_SHA256 }} `
             --split-debug-info=build/debug-info/benovpn
 
-      - name: Zip Beno VPN build
-        run: Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "benovpn-windows.zip"
+      - name: Build Beno VPN self-extracting exe
+        run: |
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z benovpn.7z "build\windows\x64\runner\Release\*"
+          $config = ";!@Install@!UTF-8!`r`nTitle=`"Beno VPN`"`r`nRunProgram=`"FlClash.exe`"`r`n;!@InstallEnd@!`r`n"
+          [System.IO.File]::WriteAllText("benovpn-config.txt", $config, [System.Text.Encoding]::UTF8)
+          cmd /c copy /b "C:\Program Files\7-Zip\7z.sfx" + benovpn-config.txt + benovpn.7z benovpn-windows.exe
 
       # ── UPLOAD BOTH ARTIFACTS ─────────────────────────────────────────────
       - name: Upload VPN Store Windows build
         uses: actions/upload-artifact@v4
         with:
           name: vpnstore-meta-windows
-          path: vpnstore-windows.zip
+          path: vpnstore-windows.exe
           overwrite: true
 
       - name: Upload Beno VPN Windows build
         uses: actions/upload-artifact@v4
         with:
           name: benovpn-meta-windows
-          path: benovpn-windows.zip
+          path: benovpn-windows.exe
           overwrite: true
