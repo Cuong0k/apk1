@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/common.dart';
@@ -124,15 +125,26 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
         final currentGroups = ref.watch(
           currentGroupsStateProvider.select((s) => s.value),
         );
-        final selectedServer = ref.watch(
+        final activeGroup = currentGroups.isNotEmpty ? currentGroups.first : null;
+        final rawSelected = ref.watch(
           selectedProxyNameProvider(
             mode == Mode.global
                 ? GroupName.GLOBAL.name
-                : (currentGroups.isNotEmpty
-                      ? currentGroups.first.name
-                      : GroupName.GLOBAL.name),
+                : (activeGroup?.name ?? GroupName.GLOBAL.name),
           ),
         );
+        // If the selected entry is itself an auto-select/fallback sub-group
+        // (URLTest/Fallback), show the actual server it picked (its `now`)
+        // instead of the group's own label like "Tự động chọn".
+        String? selectedServer = rawSelected;
+        if (mode != Mode.global && activeGroup != null && rawSelected != null) {
+          final nested = activeGroup.all.firstWhereOrNull(
+            (p) => p.name == rawSelected,
+          );
+          if (nested?.now != null && nested!.now!.isNotEmpty) {
+            selectedServer = nested.now;
+          }
+        }
         return Container(
           padding: EdgeInsets.symmetric(horizontal: 16.ap, vertical: 4),
           child: Row(
