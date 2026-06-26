@@ -100,6 +100,27 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      # Without a release keystore, Gradle falls back to the shared Android
+      # debug certificate (and appends a ".dev" applicationId suffix) — that
+      # untrusted, widely-reused cert is exactly what makes Play Protect show
+      # scary "blocked for your security" warnings on install. The keystore
+      # and its passwords live in GitHub Secrets (not in the repo) and get
+      # reconstructed here so every build reuses the same signing key
+      # (required for users to update without uninstalling first).
+      - name: Configure release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
+          cat > local.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
       # ── BUILD 1: VPN Store (client-user.jiangsuhk.com) ───────────────────
       - name: Build APK — VPN Store
         run: |

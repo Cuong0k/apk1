@@ -101,6 +101,7 @@ class ProxyCard extends StatelessWidget {
             onTap: () => _changeProxy(ref),
             child: Container(
               height: 52,
+              margin: const EdgeInsets.only(bottom: 4),
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: isSelected
                   ? BoxDecoration(
@@ -111,7 +112,13 @@ class ProxyCard extends StatelessWidget {
                         width: 1.5,
                       ),
                     )
-                  : null,
+                  : BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: context.colorScheme.outlineVariant.withOpacity(0.5),
+                        width: 1,
+                      ),
+                    ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [

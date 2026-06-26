@@ -77,3 +77,7 @@ devtools_options.yaml
 # FVM Version Cache
 .fvm/
 .fvmrc
+
+# Release signing (reconstructed in CI from GitHub Secrets)
+/android/app/keystore.jks
+/local.properties
