@@ -38,6 +38,8 @@ class _HomeScreenState extends State<HomeScreen> {
     await auth.refreshUser();
     if (auth.user != null) {
       await vpn.loadServers(auth.user!.token, authData: auth.user!.authData);
+      // Tự động ping tất cả server ngay sau khi load xong
+      vpn.pingAllServers();
     }
   }
 

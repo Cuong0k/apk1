@@ -400,6 +400,12 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
+  /// Ping tất cả server song song khi mở app / load xong (chạy nền, không block UI)
+  void pingAllServers() {
+    if (_servers.isEmpty) return;
+    Future.wait(_servers.map((s) => _pingDirect(s)));
+  }
+
   /// Public ping — used from server list UI (5s timeout).
   /// When connected, uses Clash's REST delay test for more realistic results.
   Future<int> pingServer(Server server) async {

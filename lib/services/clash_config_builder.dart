@@ -24,13 +24,27 @@ class ClashConfigBuilder {
 
     final buf = StringBuffer();
 
+    final tcpFastOpen  = settings['tcp_fast_open']  != false;
+    final udpEnabled   = settings['udp_enabled']    != false;
+    final ipv6Enabled  = settings['ipv6_enabled']   != false;
+    final logLevel     = settings['log_level'] as String? ?? 'error';
+
     // ── Global ────────────────────────────────────────────────────────────
     buf.writeln('mixed-port: 7890');
     buf.writeln('allow-lan: false');
     buf.writeln('mode: ${_clashMode(routingMode)}');
-    buf.writeln('log-level: warning');
+    buf.writeln('log-level: $logLevel');
+    buf.writeln('ipv6: $ipv6Enabled');
     buf.writeln('external-controller: 127.0.0.1:$_controllerPort');
     buf.writeln('secret: ""');
+    // Faster parallel TCP handshakes (like v2rayNG simultaneous connections)
+    buf.writeln('tcp-concurrent: true');
+    // Unified delay makes url-test latency comparable across proxy types
+    buf.writeln('unified-delay: true');
+    // Keep-alive reduces reconnect overhead on mobile networks
+    buf.writeln('keep-alive-interval: 15');
+    // Skip process lookup — speeds up routing on Android
+    buf.writeln('find-process-mode: off');
     buf.writeln('');
 
     // ── DNS ───────────────────────────────────────────────────────────────
@@ -40,16 +54,24 @@ class ClashConfigBuilder {
     // certain device configurations.
     buf.writeln('dns:');
     buf.writeln('  enable: true');
+    buf.writeln('  ipv6: $ipv6Enabled');
     buf.writeln('  enhanced-mode: normal');
+    // Primary: plain DNS (fast, always available)
     buf.writeln('  nameserver:');
     buf.writeln('    - $dns1');
     buf.writeln('    - $dns2');
+    // Fallback: DoH for encrypted DNS — prevents ISP snooping of queries
+    buf.writeln('  fallback:');
+    buf.writeln('    - https://1.1.1.1/dns-query');
+    buf.writeln('    - https://8.8.8.8/dns-query');
+    buf.writeln('  fallback-filter:');
+    buf.writeln('    geoip: false');
     buf.writeln('');
 
     // ── Proxies ───────────────────────────────────────────────────────────
     buf.writeln('proxies:');
     for (final s in uniqueServers) {
-      final entry = _proxyEntry(s, allowInsecure);
+      final entry = _proxyEntry(s, allowInsecure, tfo: tcpFastOpen, udp: udpEnabled);
       if (entry != null) buf.write(entry);
     }
     buf.writeln('');
@@ -72,8 +94,10 @@ class ClashConfigBuilder {
     buf.writeln('    type: url-test');
     buf.writeln('    proxies: [$safeNames]');
     buf.writeln('    url: "http://cp.cloudflare.com/generate_204"');
-    buf.writeln('    interval: 300');
-    buf.writeln('    tolerance: 50');
+    // Test every 2 min (same as v2rayNG default), lazy=false → test on startup
+    buf.writeln('    interval: 120');
+    buf.writeln('    tolerance: 30');
+    buf.writeln('    lazy: false');
     buf.writeln('');
 
     // Fallback
@@ -81,7 +105,8 @@ class ClashConfigBuilder {
     buf.writeln('    type: fallback');
     buf.writeln('    proxies: [$safeNames]');
     buf.writeln('    url: "http://cp.cloudflare.com/generate_204"');
-    buf.writeln('    interval: 120');
+    buf.writeln('    interval: 60');
+    buf.writeln('    lazy: false');
     buf.writeln('');
 
     // Manual select
@@ -141,21 +166,21 @@ class ClashConfigBuilder {
   static String _q(String s) => '"${s.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"';
 
   // Returns YAML block for one proxy, or null if unsupported.
-  static String? _proxyEntry(Server s, bool allowInsecure) {
+  static String? _proxyEntry(Server s, bool allowInsecure, {bool tfo = true, bool udp = true}) {
     if (!_supportsProtocol(s.protocol)) return null;
     return switch (s.protocol) {
-      'vless'  => _vless(s, allowInsecure),
-      'vmess'  => _vmess(s, allowInsecure),
-      'trojan' => _trojan(s, allowInsecure),
-      'ss'     => _ss(s),
-      'tuic'   => _tuic(s, allowInsecure),
-      'hy2'    => _hy2(s, allowInsecure),
+      'vless'  => _vless(s, allowInsecure, tfo: tfo, udp: udp),
+      'vmess'  => _vmess(s, allowInsecure, tfo: tfo, udp: udp),
+      'trojan' => _trojan(s, allowInsecure, tfo: tfo, udp: udp),
+      'ss'     => _ss(s, tfo: tfo, udp: udp),
+      'tuic'   => _tuic(s, allowInsecure),  // TUIC is always UDP
+      'hy2'    => _hy2(s, allowInsecure),   // Hysteria2 is always UDP
       _        => null,
     };
   }
 
   // ── VLESS ─────────────────────────────────────────────────────────────
-  static String _vless(Server s, bool ai) {
+  static String _vless(Server s, bool ai, {bool tfo = true, bool udp = true}) {
     final p = s.params;
     final net  = p['type'] ?? p['network'] ?? 'tcp';
     final sec  = p['security'] ?? 'none';
@@ -166,6 +191,7 @@ class ClashConfigBuilder {
     b.writeln('    server: ${s.host}');
     b.writeln('    port: ${s.port}');
     b.writeln('    uuid: ${s.uuid}');
+    b.writeln('    udp: $udp');
     b.writeln('    network: $net');
     if (flow.isNotEmpty) b.writeln('    flow: $flow');
     if (sec == 'tls' || sec == 'reality') {
@@ -173,19 +199,22 @@ class ClashConfigBuilder {
       if (ai || (p['allowInsecure'] == '1')) b.writeln('    skip-cert-verify: true');
       final sni = p['sni'] ?? p['host'] ?? s.host;
       if (sni.isNotEmpty) b.writeln('    servername: $sni');
-      if (p['fp'] != null) b.writeln('    client-fingerprint: ${p['fp']}');
+      // TLS fingerprint: use server-specified or default to chrome (anti-detection)
+      final fp = p['fp'] ?? 'chrome';
+      b.writeln('    client-fingerprint: $fp');
     }
     if (sec == 'reality') {
       b.writeln('    reality-opts:');
       b.writeln('      public-key: ${p['pbk'] ?? ''}');
       if (p['sid'] != null) b.writeln('      short-id: ${p['sid']}');
     }
+    if (tfo) b.writeln('    tfo: true');
     _appendNetworkOpts(b, net, p, s);
     return b.toString();
   }
 
   // ── VMess ─────────────────────────────────────────────────────────────
-  static String _vmess(Server s, bool ai) {
+  static String _vmess(Server s, bool ai, {bool tfo = true, bool udp = true}) {
     final p = s.params;
     final net = p['network'] ?? 'tcp';
     final sec = p['security'] ?? 'none';
@@ -197,19 +226,24 @@ class ClashConfigBuilder {
     b.writeln('    uuid: ${s.uuid}');
     b.writeln('    alterId: ${int.tryParse(p['alterId'] ?? '0') ?? 0}');
     b.writeln('    cipher: ${p['cipher'] ?? 'auto'}');
+    b.writeln('    udp: $udp');
     b.writeln('    network: $net');
     if (sec == 'tls') {
       b.writeln('    tls: true');
       if (ai || (p['allowInsecure'] == '1')) b.writeln('    skip-cert-verify: true');
       final sni = p['sni'] ?? p['host'] ?? s.host;
       if (sni.isNotEmpty) b.writeln('    servername: $sni');
+      // TLS fingerprint: chrome mimics browser TLS → evades DPI blocking
+      final fp = p['fp'] ?? 'chrome';
+      b.writeln('    client-fingerprint: $fp');
     }
+    if (tfo) b.writeln('    tfo: true');
     _appendNetworkOpts(b, net, p, s);
     return b.toString();
   }
 
   // ── Trojan ────────────────────────────────────────────────────────────
-  static String _trojan(Server s, bool ai) {
+  static String _trojan(Server s, bool ai, {bool tfo = true, bool udp = true}) {
     final p = s.params;
     final net = p['type'] ?? p['network'] ?? 'tcp';
     final b = StringBuffer();
@@ -218,25 +252,34 @@ class ClashConfigBuilder {
     b.writeln('    server: ${s.host}');
     b.writeln('    port: ${s.port}');
     b.writeln('    password: ${_q(s.uuid)}');
+    b.writeln('    udp: $udp');
     b.writeln('    network: $net');
     if (ai || (p['allowInsecure'] == '1')) b.writeln('    skip-cert-verify: true');
     final sni = p['sni'] ?? p['host'] ?? s.host;
     if (sni.isNotEmpty) b.writeln('    sni: $sni');
+    // Trojan is always TLS; add fingerprint for anti-detection
+    final fp = p['fp'] ?? 'chrome';
+    b.writeln('    client-fingerprint: $fp');
+    if (tfo) b.writeln('    tfo: true');
     _appendNetworkOpts(b, net, p, s);
     return b.toString();
   }
 
   // ── Shadowsocks ───────────────────────────────────────────────────────
-  static String _ss(Server s) {
+  static String _ss(Server s, {bool tfo = true, bool udp = true}) {
     final p = s.params;
     final password = p['password'] ?? s.uuid.split(':').lastOrNull ?? s.uuid;
+    // Prefer AEAD ciphers (chacha20-ietf-poly1305 = best on mobile CPUs without AES-NI)
+    final method = p['method'] ?? 'chacha20-ietf-poly1305';
     final b = StringBuffer();
     b.writeln('  - name: ${_q(s.name)}');
     b.writeln('    type: ss');
     b.writeln('    server: ${s.host}');
     b.writeln('    port: ${s.port}');
-    b.writeln('    cipher: ${p['method'] ?? 'aes-256-gcm'}');
+    b.writeln('    cipher: $method');
     b.writeln('    password: "$password"');
+    b.writeln('    udp: $udp');
+    if (tfo) b.writeln('    tfo: true');
     return b.toString();
   }
 
