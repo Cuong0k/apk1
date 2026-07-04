@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'pages/pages.dart';
 import 'pages/token_login.dart';
+import 'views/proxies/common.dart';
 
 class Application extends ConsumerStatefulWidget {
   const Application({super.key});
@@ -61,6 +62,9 @@ class ApplicationState extends ConsumerState<Application> {
         );
       }
       await globalState.attach();
+      // Covers both "just entered token" and "reopened app with an existing
+      // package": both paths converge here after the profile/groups are loaded.
+      delayTestAllGroups();
       _autoUpdateProfilesTask();
       _initLink();
       app?.initShortcuts();
