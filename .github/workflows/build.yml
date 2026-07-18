@@ -64,7 +64,7 @@ jobs:
                   echo "✓ Got libclash.so from FlClash release ($(stat -c%s "$SO") bytes)"
                   cp "$SO" "$JNILIBS_CORE/libclash.so"
                   cp "$SO" "$JNILIBS_APP/libclash.so"
-                  echo "LIBCLASH_SOURCE=release" >> "$GITHUB_ENV"
+                  LIBCLASH_SOURCE=release
                 fi
               fi
             fi
