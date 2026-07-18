@@ -23,7 +23,7 @@ class Navigation {
         label: PageLabel.profiles,
         builder: (_) =>
             const ProfilesView(key: GlobalObjectKey(PageLabel.profiles)),
-        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
+        modes: [NavigationItemMode.desktop],
       ),
       NavigationItem(
         icon: const Icon(Icons.view_timeline),

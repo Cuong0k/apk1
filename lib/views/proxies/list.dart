@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:fl_clash/views/profiles/add.dart';
-import 'package:fl_clash/views/profiles/edit.dart';
 import 'card.dart';
 import 'common.dart';
 
@@ -478,18 +477,6 @@ class _ListHeaderState extends State<ListHeader> {
     }
   }
 
-  void _editProfile(BuildContext context) {
-    final profile = widget.profile;
-    if (profile == null) return;
-    showExtend(
-      context,
-      builder: (_) => AdaptiveSheetScaffold(
-        body: EditProfileView(context: context, profile: profile),
-        title: context.appLocalizations.edit,
-      ),
-    );
-  }
-
   void _addProfile(BuildContext context) {
     showExtend(
       context,
@@ -647,24 +634,11 @@ class _ListHeaderState extends State<ListHeader> {
                 padding: EdgeInsets.zero,
                 iconSize: 18,
                 onSelected: (value) {
-                  if (value == 'edit') _editProfile(context);
                   if (value == 'update') _updateProfile();
                   if (value == 'add') _addProfile(context);
                   if (value == 'delete') _deleteProfile(context);
                 },
                 itemBuilder: (ctx) => [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, size: 18,
-                            color: context.colorScheme.onSurface),
-                        const SizedBox(width: 8),
-                        Text(context.appLocalizations.edit,
-                            style: context.textTheme.bodyMedium),
-                      ],
-                    ),
-                  ),
                   PopupMenuItem(
                     value: 'update',
                     child: Row(
