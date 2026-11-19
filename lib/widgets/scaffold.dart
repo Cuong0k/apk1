@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
-// Màu header cố định của VPN Store (không đổi khi cuộn)
-const kHeaderColor = Color(0xFF52B7FA);
-
 import 'chip.dart';
 import 'inherited.dart';
+
+// Màu header cố định của VPN Store (không đổi khi cuộn)
+const kHeaderColor = Color(0xFF52B7FA);
 
 typedef OnKeywordsUpdateCallback = void Function(List<String> keywords);
 
