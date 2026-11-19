@@ -51,7 +51,8 @@ jobs:
 
           # ── Try pre-built libclash.so from FlClash official release ────────
           echo "=== Fetching FlClash latest release ==="
-          RELEASE_JSON=$(curl -sf "https://api.github.com/repos/chen08209/FlClash/releases/latest" || true)
+          # Ghim v0.8.94: bản mới hơn (0.9.x) đổi API libclash (thiếu startTUN/invokeAction...) → link lỗi
+          RELEASE_JSON=$(curl -sf "https://api.github.com/repos/chen08209/FlClash/releases/tags/v0.8.94" || true)
 
           if [ -n "$RELEASE_JSON" ]; then
             APK_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' \
