@@ -122,18 +122,41 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -e
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "Thiếu secret keystore — dừng để không ra APK ký debug (không cài đè được)"; exit 1
+          fi
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
-          cat > local.properties <<EOF
-          storePassword=$STORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          EOF
+          # Gradle đọc rootProject = android/ → phải ghi vào android/local.properties
+          # (trước đây ghi nhầm ra ./local.properties nên APK bị ký debug key ngẫu nhiên)
+          touch android/local.properties
+          sed -i '/^storePassword=/d;/^keyAlias=/d;/^keyPassword=/d' android/local.properties
+          {
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } >> android/local.properties
+          keytool -list -keystore android/app/keystore.jks -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" | tail -2
 
       # ── BUILD 1: VPN Store (client-user.jiangsuhk.com) ───────────────────
       - name: Build APK — VPN Store
         run: |
+          # versionCode tăng dần theo mỗi lần build → luôn cài đè được lên bản cũ
+          BUILD_NUMBER=$((2026060000 + ${{ github.run_number }}))
+          echo "versionCode=$BUILD_NUMBER"
           flutter build apk --release --no-tree-shake-icons --dart-define=APP_ENV=stable \
+            --build-number=$BUILD_NUMBER \
             --obfuscate --split-debug-info=build/debug-info/vpnstore
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
+          $APKSIGNER verify --print-certs build/app/outputs/flutter-apk/app-release.apk | tee /tmp/certs.txt
+          if grep -qi "CN=Android Debug" /tmp/certs.txt; then
+            echo "APK đang ký bằng debug key — sai cấu hình ký"; exit 1
+          fi
+          AAPT=$(ls $ANDROID_HOME/build-tools/*/aapt | sort -V | tail -1)
+          $AAPT dump badging build/app/outputs/flutter-apk/app-release.apk | head -1
 
       - name: Save VPN Store APK
         run: cp build/app/outputs/flutter-apk/app-release.apk /tmp/vpnstore-release.apk
