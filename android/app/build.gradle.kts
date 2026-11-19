@@ -15,9 +15,13 @@ val localProperties = Properties().apply {
 }
 
 val mStoreFile: File = file("keystore.jks")
-val mStorePassword: String? = localProperties.getProperty("storePassword")
-val mKeyAlias: String? = localProperties.getProperty("keyAlias")
-val mKeyPassword: String? = localProperties.getProperty("keyPassword")
+// CI: lấy từ biến môi trường (GitHub Secrets); local: lấy từ local.properties
+val mStorePassword: String? = System.getenv("ANDROID_KEYSTORE_PASSWORD")?.takeIf { it.isNotEmpty() }
+    ?: localProperties.getProperty("storePassword")
+val mKeyAlias: String? = System.getenv("ANDROID_KEY_ALIAS")?.takeIf { it.isNotEmpty() }
+    ?: localProperties.getProperty("keyAlias")
+val mKeyPassword: String? = System.getenv("ANDROID_KEY_PASSWORD")?.takeIf { it.isNotEmpty() }
+    ?: localProperties.getProperty("keyPassword")
 val isRelease =
     mStoreFile.exists() && mStorePassword != null && mKeyAlias != null && mKeyPassword != null
 
