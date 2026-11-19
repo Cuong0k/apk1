@@ -4,6 +4,10 @@ import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/widgets/pop_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+
+// Màu header cố định của VPN Store (không đổi khi cuộn)
+const kHeaderColor = Color(0xFF52B7FA);
 
 import 'chip.dart';
 import 'inherited.dart';
@@ -273,7 +277,19 @@ class CommonScaffoldState extends State<CommonScaffold> {
                       automaticallyImplyLeading: backAction != null
                           ? false
                           : true,
-                      animateColor: true,
+                      animateColor: false,
+                      backgroundColor: _isSearch ? null : kHeaderColor,
+                      foregroundColor: _isSearch ? null : Colors.white,
+                      surfaceTintColor: Colors.transparent,
+                      scrolledUnderElevation: 0,
+                      elevation: 0,
+                      systemOverlayStyle: _isSearch
+                          ? null
+                          : const SystemUiOverlayStyle(
+                              statusBarColor: Colors.transparent,
+                              statusBarIconBrightness: Brightness.light,
+                              statusBarBrightness: Brightness.dark,
+                            ),
                       centerTitle: widget.centerTitle ?? false,
                       leading: _buildLeading(backAction),
                       title: _buildTitle(state.searchState),
