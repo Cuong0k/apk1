@@ -13,7 +13,6 @@ import 'package:fl_clash/views/proxies/providers.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import 'common.dart';
 import 'setting.dart';
@@ -205,159 +204,119 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
     );
   }
 
-  Widget _buildLatencyRow() {
-    return Consumer(
-      builder: (context, ref, _) {
-        final hasProfiles = ref.watch(
-          profilesProvider.select((s) => s.isNotEmpty),
-        );
-        if (!hasProfiles) return const SizedBox.shrink();
-        return InkWell(
-          onTap: () async {
-            await delayTestAllGroups();
-          },
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 16.ap, vertical: 10),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.access_time_outlined,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    context.appLocalizations.delayTest,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.play_circle_outline,
-                  size: 22,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  bool _syncing = false;
+  bool _testing = false;
+
+  Future<void> _handleDelayTest() async {
+    if (_testing) return;
+    setState(() => _testing = true);
+    try {
+      await delayTestAllGroups();
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
   }
 
-  Widget _buildModeRow() {
+  Future<void> _handleSyncProfile() async {
+    if (_syncing) return;
+    final profile = ref.read(currentProfileProvider);
+    if (profile == null) return;
+    setState(() => _syncing = true);
+    try {
+      await globalState.container
+          .read(profilesActionProvider.notifier)
+          .updateProfile(profile, showLoading: true);
+      globalState.showNotifier('Đồng bộ gói VPN thành công');
+    } catch (_) {
+      globalState.showNotifier('Đồng bộ thất bại, vui lòng thử lại');
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  Widget _buildActionTabs() {
     return Consumer(
       builder: (context, ref, _) {
         final hasProfiles = ref.watch(
           profilesProvider.select((s) => s.isNotEmpty),
         );
         if (!hasProfiles) return const SizedBox.shrink();
-        final mode = ref.watch(
-          patchClashConfigProvider.select((s) => s.mode),
-        );
-        return Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8.ap, vertical: 2),
-          child: Row(
-            children: [
-              Padding(
-                padding: EdgeInsets.only(right: 4.ap),
-                child: Icon(
-                  Icons.alt_route_outlined,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              ...Mode.values.map((m) {
-                final isSelected = m == mode;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      globalState.container
-                          .read(setupActionProvider.notifier)
-                          .changeMode(m);
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(vertical: 7),
-                      margin: EdgeInsets.symmetric(horizontal: 3.ap),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primaryContainer
-                            : Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withAlpha(100),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        Intl.message(m.name),
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-              Padding(
-                padding: EdgeInsets.only(left: 4.ap),
-                child: Row(
+        final scheme = Theme.of(context).colorScheme;
+        Widget item({
+          required IconData icon,
+          required String label,
+          required bool busy,
+          required VoidCallback onTap,
+        }) {
+          return Expanded(
+            child: InkWell(
+              onTap: busy ? null : onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: () async {
-                        await delayTestAllGroups();
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.refresh,
-                          size: 17,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: busy
+                          ? Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: scheme.primary,
+                              ),
+                            )
+                          : Icon(icon, size: 24, color: scheme.primary),
                     ),
-                    const SizedBox(width: 2),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: () {
-                        showSheet(
-                          context: context,
-                          props: const SheetProps(isScrollControlled: true),
-                          builder: (_) {
-                            return AdaptiveSheetScaffold(
-                              body: const ProxiesSetting(),
-                              title: context.appLocalizations.settings,
-                            );
-                          },
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.filter_list,
-                          size: 17,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface,
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16.ap, 6, 16.ap, 8),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: scheme.outlineVariant.withAlpha(120)),
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  item(
+                    icon: Icons.schedule_outlined,
+                    label: 'Kiểm tra máy chủ',
+                    busy: _testing,
+                    onTap: _handleDelayTest,
+                  ),
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: scheme.outlineVariant.withAlpha(120),
+                  ),
+                  item(
+                    icon: Icons.sync,
+                    label: 'Đồng Bộ Gói VPN',
+                    busy: _syncing,
+                    onTap: _handleSyncProfile,
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -418,6 +377,13 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
         });
       }
     }, fireImmediately: true);
+    // Chế độ định tuyến cố định: Quy tắc (đã bỏ thanh chọn chế độ)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(patchClashConfigProvider).mode != Mode.rule) {
+        ref.read(setupActionProvider.notifier).changeMode(Mode.rule);
+      }
+    });
     // Always list view — _isTab stays false
     ref.listenManual(
       currentPageLabelProvider.select((state) => state == PageLabel.proxies),
@@ -443,8 +409,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildVpnRow(),
-          _buildLatencyRow(),
-          _buildModeRow(),
+          _buildActionTabs(),
           Divider(
             height: 1,
             color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
