@@ -49,7 +49,7 @@ class ProxyCard extends StatelessWidget {
     globalState.showNotifier(currentAppLocalizations.notSelectedTip);
   }
 
-  Widget _buildDelay(BuildContext context) {
+  Widget _buildDelay(BuildContext context, [bool isSelected = false]) {
     return Consumer(
       builder: (context, ref, _) {
         final delay = ref.watch(
@@ -79,7 +79,7 @@ class ProxyCard extends StatelessWidget {
             maxLines: 1,
             textAlign: TextAlign.right,
             style: context.textTheme.labelSmall?.copyWith(
-              color: utils.getDelayColor(delay),
+              color: isSelected ? Colors.white : utils.getDelayColor(delay),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -105,12 +105,9 @@ class ProxyCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: isSelected
                   ? BoxDecoration(
-                      color: context.colorScheme.primaryContainer.withOpacity(0.45),
+                      color: kHeaderColor,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: context.colorScheme.primary,
-                        width: 1.5,
-                      ),
+                      border: Border.all(color: kHeaderColor, width: 1.5),
                     )
                   : BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
@@ -129,6 +126,7 @@ class ProxyCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: context.textTheme.bodyMedium?.copyWith(
                         fontWeight: isSelected ? FontWeight.w600 : null,
+                        color: isSelected ? Colors.white : null,
                       ),
                     ),
                   ),
@@ -141,7 +139,9 @@ class ProxyCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
                       style: context.textTheme.bodySmall?.copyWith(
-                        color: context.textTheme.bodySmall?.color?.withOpacity(0.55),
+                        color: isSelected
+                            ? Colors.white.withOpacity(0.85)
+                            : context.textTheme.bodySmall?.color?.withOpacity(0.55),
                       ),
                     ),
                   ),
@@ -150,7 +150,7 @@ class ProxyCard extends StatelessWidget {
                     width: 60,
                     child: Align(
                       alignment: Alignment.centerRight,
-                      child: _buildDelay(context),
+                      child: _buildDelay(context, isSelected),
                     ),
                   ),
                 ],
