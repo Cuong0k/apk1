@@ -113,11 +113,6 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
           profilesProvider.select((s) => s.isNotEmpty),
         );
         if (!hasProfiles) return const SizedBox.shrink();
-        final profileLabel = ref.watch(
-          currentProfileProvider.select(
-            (s) => s?.label.isNotEmpty == true ? s!.label : s?.id.toString() ?? '',
-          ),
-        );
         final mode = ref.watch(
           patchClashConfigProvider.select((s) => s.mode),
         );
@@ -148,12 +143,23 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
           padding: EdgeInsets.symmetric(horizontal: 16.ap, vertical: 4),
           child: Row(
             children: [
-              Icon(
-                isStart ? Icons.lock : Icons.lock_open,
-                size: 22,
-                color: isStart
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isStart
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+                child: Icon(
+                  Icons.power_settings_new_rounded,
+                  size: 22,
+                  color: isStart
+                      ? Theme.of(context).colorScheme.onPrimary
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -162,11 +168,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      isStart
-                          ? (profileLabel.isNotEmpty
-                              ? profileLabel
-                              : context.appLocalizations.connected)
-                          : context.appLocalizations.disconnected,
+                      isStart ? 'Đã kết nối VPN' : 'Chưa kết nối VPN',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w500,
                         color: isStart
