@@ -13,6 +13,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Runner mặc định dùng JDK 25 — Gradle 8.13 không hỗ trợ, cố định JDK 17
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Setup NDK
         uses: nttld/setup-ndk@v1
         with:
