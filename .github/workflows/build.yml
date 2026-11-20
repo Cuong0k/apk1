@@ -51,20 +51,13 @@ jobs:
 
           # ── Try pre-built libclash.so from FlClash official release ────────
           echo "=== Fetching FlClash latest release ==="
-          # Ghim v0.8.94: bản mới hơn (0.9.x) đổi API libclash (thiếu startTUN/invokeAction...) → link lỗi
-          RELEASE_JSON=$(curl -sf "https://api.github.com/repos/chen08209/FlClash/releases/tags/v0.8.94" || true)
-
-          if [ -n "$RELEASE_JSON" ]; then
-            APK_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' \
-              | grep -i 'android' | grep -i 'arm64' | grep -v 'universal' \
-              | head -1 | cut -d'"' -f4)
-            [ -z "$APK_URL" ] && APK_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' \
-              | grep -i 'android' | head -1 | cut -d'"' -f4)
-          fi
+          # Ghim v0.8.94: bản mới hơn (0.9.x) đổi API libclash (thiếu startTUN/invokeAction...) → link lỗi.
+          # Tải thẳng URL cố định (không gọi api.github.com → tránh rate limit trả rỗng).
+          APK_URL="https://github.com/chen08209/FlClash/releases/download/v0.8.94/FlClash-0.8.94-android-arm64-v8a.apk"
 
           if [ -n "$APK_URL" ]; then
             echo "Downloading: $APK_URL"
-            if curl -sfL -o /tmp/flclash.apk "$APK_URL"; then
+            if curl -sfL --retry 5 --retry-delay 5 -o /tmp/flclash.apk "$APK_URL"; then
               mkdir -p /tmp/flclash_apk
               if unzip -o /tmp/flclash.apk "lib/arm64-v8a/libclash.so" -d /tmp/flclash_apk 2>/dev/null; then
                 SO=/tmp/flclash_apk/lib/arm64-v8a/libclash.so
