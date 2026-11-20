@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart' as dio;
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
@@ -13,10 +14,10 @@ import 'package:fl_clash/views/config/config.dart';
 import 'package:fl_clash/views/hotkey.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' show dirname, join;
-import 'package:url_launcher/url_launcher.dart';
 
 import 'config/advanced.dart';
 import 'developer.dart';
@@ -123,29 +124,159 @@ class _ToolViewState extends ConsumerState<ToolsView> {
   }
 }
 
-class _UpdateAppItem extends StatelessWidget {
+// ─── Cập nhật app ngay trong ứng dụng: tải APK → bấm Cài đặt ─────────────────
+
+class _UpdateAppItem extends StatefulWidget {
   const _UpdateAppItem();
 
-  static const _apkUrl = 'https://client-user.jiangsuhk.com/apk/vpnstore.apk';
+  @override
+  State<_UpdateAppItem> createState() => _UpdateAppItemState();
+}
 
-  Future<void> _handleUpdate() async {
-    // Mở bằng trình duyệt → tải APK → bấm cài đặt là cài đè lên bản hiện tại
-    final ok = await launchUrl(
-      Uri.parse(_apkUrl),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!ok) {
-      globalState.showNotifier('Không mở được link tải, vui lòng thử lại');
+class _UpdateAppItemState extends State<_UpdateAppItem> {
+  static const _apkUrl = 'https://client-user.jiangsuhk.com/apk/vpnstore.apk';
+  static const _channel = MethodChannel('com.vpnstore.app/update');
+
+  bool _downloading = false;
+  double? _progress;
+  String? _apkPath;
+  String? _error;
+  dio.CancelToken? _cancelToken;
+
+  @override
+  void dispose() {
+    _cancelToken?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _download() async {
+    if (_downloading) return;
+    setState(() {
+      _downloading = true;
+      _progress = 0;
+      _error = null;
+      _apkPath = null;
+    });
+    _cancelToken = dio.CancelToken();
+    try {
+      final dir = await _channel.invokeMethod<String>('getApkDir');
+      final savePath = '$dir/vpnstore_update.apk';
+      final old = File(savePath);
+      if (await old.exists()) await old.delete();
+      await dio.Dio().download(
+        _apkUrl,
+        savePath,
+        cancelToken: _cancelToken,
+        options: dio.Options(
+          receiveTimeout: const Duration(minutes: 10),
+          headers: {'Cache-Control': 'no-cache'},
+        ),
+        onReceiveProgress: (received, total) {
+          if (!mounted) return;
+          setState(() => _progress = total > 0 ? received / total : null);
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _downloading = false;
+        _apkPath = savePath;
+      });
+      _askInstall();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _downloading = false;
+        _progress = null;
+        _error = (e is dio.DioException && dio.CancelToken.isCancel(e))
+            ? 'Đã huỷ tải'
+            : 'Tải thất bại, vui lòng thử lại';
+      });
     }
+  }
+
+  Future<void> _askInstall() async {
+    final res = await globalState.showMessage(
+      title: 'Tải xong bản cập nhật',
+      message: const TextSpan(
+        text: 'Bản VPN Store mới đã tải xong. Bấm "Cài đặt" để cập nhật ngay.',
+      ),
+      confirmText: 'Cài đặt',
+    );
+    if (res == true) await _install();
+  }
+
+  Future<void> _install() async {
+    final path = _apkPath;
+    if (path == null) return;
+    try {
+      final canInstall = await _channel.invokeMethod<bool>('canInstall') ?? true;
+      if (!canInstall) {
+        globalState.showNotifier(
+          'Hãy bật "Cho phép cài ứng dụng" cho VPN Store, rồi quay lại bấm Cài đặt',
+        );
+        await _channel.invokeMethod('openInstallPermission');
+        return;
+      }
+      await _channel.invokeMethod('installApk', {'path': path});
+    } catch (_) {
+      globalState.showNotifier('Không mở được trình cài đặt, vui lòng thử lại');
+    }
+  }
+
+  String get _subtitle {
+    if (_downloading) {
+      return _progress != null
+          ? 'Đang tải... ${(_progress! * 100).toStringAsFixed(0)}%'
+          : 'Đang tải...';
+    }
+    if (_apkPath != null) return 'Đã tải xong — bấm Cài đặt để cập nhật';
+    if (_error != null) return _error!;
+    return 'Tải và cài đặt phiên bản VPN Store mới nhất';
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListItem(
-      leading: const Icon(Icons.system_update, color: kHeaderColor),
-      title: const Text('Cập nhật ứng dụng'),
-      subtitle: const Text('Tải và cài đặt phiên bản VPN Store mới nhất'),
-      onTap: _handleUpdate,
+    final Widget trailing;
+    if (_downloading) {
+      trailing = TextButton(
+        onPressed: () => _cancelToken?.cancel(),
+        child: const Text('Huỷ'),
+      );
+    } else if (_apkPath != null) {
+      trailing = FilledButton(
+        style: FilledButton.styleFrom(backgroundColor: kHeaderColor),
+        onPressed: _install,
+        child: const Text('Cài đặt'),
+      );
+    } else {
+      trailing = FilledButton(
+        style: FilledButton.styleFrom(backgroundColor: kHeaderColor),
+        onPressed: _download,
+        child: const Text('Cập nhật'),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListItem(
+          leading: const Icon(Icons.system_update, color: kHeaderColor),
+          title: const Text('Cập nhật ứng dụng'),
+          subtitle: Text(_subtitle),
+          trailing: trailing,
+          onTap: _downloading
+              ? null
+              : (_apkPath != null ? _install : _download),
+        ),
+        if (_downloading)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: LinearProgressIndicator(
+              value: _progress,
+              color: kHeaderColor,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+      ],
     );
   }
 }

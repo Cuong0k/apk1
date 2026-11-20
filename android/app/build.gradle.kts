@@ -101,6 +101,7 @@ dependencies {
     implementation(project(":service"))
     implementation(project(":common"))
     implementation(libs.core.splashscreen)
+    implementation(libs.androidx.core) // FileProvider cho cập nhật APK trong app
     implementation(libs.gson)
     implementation(libs.smali.dexlib2) {
         exclude(group = "com.google.guava", module = "guava")
