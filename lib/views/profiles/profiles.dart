@@ -354,22 +354,8 @@ class ProfileItem extends StatelessWidget {
                                 //     );
                                 //   },
                                 // ),
-                                if (profile.type == ProfileType.url) ...[
-                                  PopupMenuItemData(
-                                    icon: Icons.copy,
-                                    label: appLocalizations.copyLink,
-                                    onPressed: () {
-                                      _handleCopyLink(context);
-                                    },
-                                  ),
-                                ],
-                                PopupMenuItemData(
-                                  icon: Icons.file_copy_outlined,
-                                  label: appLocalizations.exportFile,
-                                  onPressed: () {
-                                    _handleExportFile(context);
-                                  },
-                                ),
+                                // Bảo mật: bỏ "Sao chép liên kết" & "Xuất file"
+                                // (lộ link đăng ký và cấu hình máy chủ)
                               ],
                             ),
                             PopupMenuItemData(

@@ -31,7 +31,8 @@ class Navigation {
         builder: (_) =>
             const RequestsView(key: GlobalObjectKey(PageLabel.requests)),
         description: 'requestsDesc',
-        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
+        // Ẩn trên điện thoại: lộ tên miền/IP máy chủ VPN
+        modes: [NavigationItemMode.desktop],
       ),
       NavigationItem(
         icon: const Icon(Icons.ballot),
@@ -39,7 +40,8 @@ class Navigation {
         builder: (_) =>
             const ConnectionsView(key: GlobalObjectKey(PageLabel.connections)),
         description: 'connectionsDesc',
-        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
+        // Ẩn trên điện thoại: chi tiết kết nối lộ IP:cổng máy chủ VPN
+        modes: [NavigationItemMode.desktop],
       ),
       NavigationItem(
         icon: const Icon(Icons.storage),
@@ -47,16 +49,16 @@ class Navigation {
         description: 'resourcesDesc',
         builder: (_) =>
             const ResourcesView(key: GlobalObjectKey(PageLabel.resources)),
-        modes: [NavigationItemMode.more],
+        // Ẩn: lộ link nhà cung cấp/cấu hình
+        modes: [NavigationItemMode.desktop],
       ),
       NavigationItem(
         icon: const Icon(Icons.adb),
         label: PageLabel.logs,
         builder: (_) => const LogsView(key: GlobalObjectKey(PageLabel.logs)),
         description: 'logsDesc',
-        modes: openLogs
-            ? [NavigationItemMode.desktop, NavigationItemMode.more]
-            : [],
+        // Ẩn trên điện thoại: log có thể chứa IP:cổng máy chủ
+        modes: openLogs ? [NavigationItemMode.desktop] : [],
       ),
       NavigationItem(
         icon: const Icon(Icons.construction),

@@ -234,6 +234,61 @@ Future<VM2<String, String>> _makeRealProfileTask(
     'connectivitycheck.gstatic.com',
     'captive.apple.com',
   ];
+  // ── Tối ưu cho mạng Trung Quốc ───────────────────────────────────────────
+  // DNS nội địa TQ (DoH theo IP, không bị đầu độc, không cần bootstrap).
+  // Với fake-ip, tên miền nước ngoài được phân giải ở phía máy chủ VPN nên
+  // không cần DNS nước ngoài (8.8.8.8/1.1.1.1 bị chặn → gây chậm/timeout).
+  const cnDoh = [
+    'https://223.5.5.5/dns-query',
+    'https://120.53.53.53/dns-query',
+  ];
+  rawConfig['dns']['enable'] = true;
+  rawConfig['dns']['ipv6'] = false;
+  rawConfig['dns']['default-nameserver'] = ['223.5.5.5', '119.29.29.29'];
+  rawConfig['dns']['nameserver'] = cnDoh;
+  // Phân giải tên miền máy chủ VPN bằng DNS nội địa → kết nối nhanh, không lỗi
+  rawConfig['dns']['proxy-server-nameserver'] = cnDoh;
+  rawConfig['dns'].remove('fallback');
+  rawConfig['dns'].remove('fallback-filter');
+  // nameserver-policy của gói có thể trỏ DNS nước ngoài (8.8.8.8, tls://1.1.1.1…)
+  // → bị chặn ở TQ, gây treo phân giải. Bỏ policy, dùng DNS nội địa ở trên.
+  rawConfig['dns']['nameserver-policy'] = {};
+  // Sniffer: lấy tên miền từ TLS/HTTP/QUIC để rule theo tên miền chạy đúng
+  if (rawConfig['sniffer'] == null || rawConfig['sniffer']['enable'] != true) {
+    rawConfig['sniffer'] = {
+      'enable': true,
+      'force-dns-mapping': true,
+      'parse-pure-ip': true,
+      'override-destination': true,
+      'sniff': {
+        'HTTP': {
+          'ports': ['80', '8080-8880'],
+          'override-destination': true,
+        },
+        'TLS': {
+          'ports': ['443', '8443'],
+        },
+        'QUIC': {
+          'ports': ['443', '8443'],
+        },
+      },
+    };
+  }
+  // GFW hay cắt kết nối "im lặng" → keep-alive ngắn giữ kết nối ổn định
+  rawConfig['keep-alive-interval'] = 15;
+  rawConfig['keep-alive-idle'] = 15;
+  // Không dò tiến trình cho từng kết nối → giảm độ trễ & pin trên Android
+  rawConfig['find-process-mode'] = 'off';
+  rawConfig['ipv6'] = false;
+  rawConfig['tcp-concurrent'] = realPatchConfig.tcpConcurrent;
+  rawConfig['unified-delay'] = true;
+  // Bảo mật: tắt cứng bộ điều khiển ngoài (API đọc được cấu hình/kết nối)
+  rawConfig['external-controller'] = '';
+  rawConfig.remove('external-controller-tls');
+  rawConfig.remove('external-controller-unix');
+  rawConfig.remove('external-controller-pipe');
+  rawConfig.remove('secret');
+
   if (appendSystemDns) {
     final List<String> nameserver = List<String>.from(
       rawConfig['dns']['nameserver'] ?? [],

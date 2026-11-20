@@ -336,11 +336,7 @@ class TrackerInfoDetailView extends StatelessWidget {
           title: appLocalizations.specialRules,
           desc: trackerInfo.metadata.specialRules,
         ),
-      if (trackerInfo.metadata.remoteDestination.isNotEmpty)
-        _buildItem(
-          title: appLocalizations.remoteDestination,
-          desc: trackerInfo.metadata.remoteDestination,
-        ),
+      // Bảo mật: không hiển thị "Đích từ xa" (IP:cổng máy chủ VPN)
       _buildChains(context),
     ];
     return SelectionArea(

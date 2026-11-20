@@ -72,12 +72,14 @@ class _ToolViewState extends ConsumerState<ToolsView> {
       items: [
         const _LocaleItem(),
         const _ThemeItem(),
-        const _BackupItem(),
+        // Sao lưu xuất cả link đăng ký + cấu hình máy chủ → chỉ cho desktop
+        if (!system.isAndroid) const _BackupItem(),
         if (system.isDesktop) const _HotkeyItem(),
         if (system.isWindows) const _LoopbackItem(),
         if (system.isAndroid) const _AccessItem(),
         const _ConfigItem(),
-        const _AdvancedConfigItem(),
+        // Cấu hình nâng cao có trình sửa script đọc được toàn bộ cấu hình
+        if (!system.isAndroid) const _AdvancedConfigItem(),
         const _SettingItem(),
       ],
     );

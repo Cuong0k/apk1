@@ -9,10 +9,10 @@ import 'package:fl_clash/views/dashboard/widgets/network_detection.dart' as nd;
 import 'package:fl_clash/views/dashboard/widgets/traffic_usage.dart';
 import 'package:fl_clash/views/profiles/add.dart';
 import 'package:fl_clash/views/proxies/list.dart';
-import 'package:fl_clash/views/proxies/providers.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'common.dart';
 import 'setting.dart';
@@ -74,19 +74,6 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
                 );
               },
             ),
-            if (_hasProviders)
-              PopupMenuItemData(
-                icon: Icons.poll_outlined,
-                label: appLocalizations.providers,
-                onPressed: () {
-                  showExtend(
-                    context,
-                    builder: (_) {
-                      return const ProvidersView();
-                    },
-                  );
-                },
-              ),
           ],
         ),
       ),
@@ -366,6 +353,20 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
     );
   }
 
+  // Bản cài cũ đã lưu allow-lan=false → bật TCP đồng thời + LAN đúng 1 lần
+  Future<void> _applyDefaultsOnce() async {
+    const key = 'vpnstore_defaults_v1';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(key) == true) return;
+      if (!mounted) return;
+      ref
+          .read(patchClashConfigProvider.notifier)
+          .update((s) => s.copyWith(tcpConcurrent: true, allowLan: true));
+      await prefs.setBool(key, true);
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
@@ -385,6 +386,7 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
       if (ref.read(patchClashConfigProvider).mode != Mode.rule) {
         ref.read(setupActionProvider.notifier).changeMode(Mode.rule);
       }
+      _applyDefaultsOnce();
     });
     // Always list view — _isTab stays false
     ref.listenManual(

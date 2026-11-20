@@ -472,7 +472,7 @@ final generalItems = <Widget>[
   const FindProcessItem(),
   const TcpConcurrentItem(),
   const GeodataLoaderItem(),
-  const ExternalControllerItem(),
+  // Bộ điều khiển ngoài bị tắt cứng (bảo mật) → ẩn công tắc
 ].separated(const Divider(height: 0)).toList();
 
 class _PortDialog extends ConsumerStatefulWidget {
