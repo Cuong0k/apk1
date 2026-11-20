@@ -48,6 +48,32 @@ class MainActivity : FlutterActivity(),
                     result.success(dir.absolutePath)
                 }
 
+                // Đọc versionCode của APK đã tải và của app đang cài
+                "checkApk" -> {
+                    val path = call.argument<String>("path")
+                    val info = path?.let {
+                        try {
+                            packageManager.getPackageArchiveInfo(it, 0)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    if (info == null) {
+                        result.success(mapOf("valid" to false))
+                        return@setMethodCallHandler
+                    }
+                    val current = packageManager.getPackageInfo(packageName, 0)
+                    result.success(
+                        mapOf(
+                            "valid" to true,
+                            "samePackage" to (info.packageName == packageName),
+                            "newVersion" to info.longVersionCodeCompat(),
+                            "currentVersion" to current.longVersionCodeCompat(),
+                            "newVersionName" to (info.versionName ?: ""),
+                        )
+                    )
+                }
+
                 "canInstall" -> {
                     result.success(
                         Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
@@ -93,6 +119,11 @@ class MainActivity : FlutterActivity(),
             }
         }
     }
+
+    @Suppress("DEPRECATION")
+    private fun android.content.pm.PackageInfo.longVersionCodeCompat(): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) longVersionCode
+        else versionCode.toLong()
 
     override fun onDestroy() {
         GlobalState.launch {

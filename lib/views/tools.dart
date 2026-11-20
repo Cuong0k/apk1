@@ -163,8 +163,10 @@ class _UpdateAppItemState extends State<_UpdateAppItem> {
       final savePath = '$dir/vpnstore_update.apk';
       final old = File(savePath);
       if (await old.exists()) await old.delete();
+      // ?t=... để Cloudflare không trả bản APK cũ đang cache (max-age 4h)
+      final url = '$_apkUrl?t=${DateTime.now().millisecondsSinceEpoch}';
       await dio.Dio().download(
-        _apkUrl,
+        url,
         savePath,
         cancelToken: _cancelToken,
         options: dio.Options(
@@ -177,6 +179,32 @@ class _UpdateAppItemState extends State<_UpdateAppItem> {
         },
       );
       if (!mounted) return;
+      // Kiểm tra APK: hợp lệ? đúng app? có mới hơn bản đang cài?
+      final check = Map<String, dynamic>.from(
+        await _channel.invokeMethod<Map>('checkApk', {'path': savePath}) ?? {},
+      );
+      if (!mounted) return;
+      if (check['valid'] != true || check['samePackage'] != true) {
+        await File(savePath).delete().catchError((_) => File(savePath));
+        setState(() {
+          _downloading = false;
+          _progress = null;
+          _error = 'File tải về bị lỗi, vui lòng thử lại';
+        });
+        return;
+      }
+      final newVer = (check['newVersion'] as num?)?.toInt() ?? 0;
+      final curVer = (check['currentVersion'] as num?)?.toInt() ?? 0;
+      if (newVer <= curVer) {
+        await File(savePath).delete().catchError((_) => File(savePath));
+        setState(() {
+          _downloading = false;
+          _progress = null;
+          _error = 'Bạn đang dùng phiên bản mới nhất';
+        });
+        globalState.showNotifier('Bạn đang dùng phiên bản mới nhất');
+        return;
+      }
       setState(() {
         _downloading = false;
         _apkPath = savePath;
