@@ -345,9 +345,134 @@ Future<VM2<String, String>> _makeRealProfileTask(
   if (data.proxyGroups.isNotEmpty) {
     rawConfig['proxy-groups'] = data.proxyGroups;
   }
+  rules = _applyChinaToVietnamRouting(rawConfig, rules);
   rawConfig['rules'] = rules;
   final yaml = await _encodeYaml(Map<String, dynamic>.from(rawConfig));
   return VM2(yaml, yaml.toMd5());
+}
+
+// ─── Định tuyến cho khách ở Trung Quốc dùng dịch vụ Việt Nam ──────────────────
+// Ưu tiên cao nhất (chèn trước luật của gói đăng ký):
+//  1. Trang/app Việt Nam (.vn, Zalo, ngân hàng, báo, TMĐT, GEOIP VN)
+//     → nhóm máy chủ Việt Nam (tự chọn node 🇻🇳 nhanh nhất) để có IP Việt Nam.
+//  2. Mạng xã hội / dịch vụ quốc tế bị chặn ở TQ (Facebook, TikTok, YouTube,
+//     Google, Telegram…) → luôn đi VPN (nhóm chính người dùng đang chọn).
+//  3. Trang/app Trung Quốc → đi thẳng (nhanh, không bị app TQ chặn IP nước ngoài).
+//  4. Còn lại → theo luật gói, cuối cùng MATCH → VPN.
+// Tránh trường hợp gói có luật "Bypass VN" (GEOIP,VN,DIRECT) làm trang VN
+// đi thẳng từ TQ → chậm hoặc bị chặn.
+
+const _vnGroupName = '🇻🇳 Việt Nam (tự động)';
+
+const _vnDomainSuffixes = [
+  'vn',
+  // Zalo / VNG
+  'zalo.me', 'zaloapp.com', 'zadn.vn', 'zdn.vn', 'zmdcdn.me', 'zingmp3.vn',
+  'vng.com.vn', 'zalopay.vn', 'zalopay.com.vn',
+  // Ví / ngân hàng (tên miền không phải .vn)
+  'momo.vn', 'mservice.io', 'momocdn.net', 'techcombank.com', 'sacombank.com',
+  'vib.com.vn', 'tpb.vn', 'cake.vn', 'timo.vn',
+  // Báo / nội dung
+  'vnexpress.net', 'baomoi.com', 'nhaccuatui.com', 'cafef.vn',
+  'webtretho.com', 'coccoc.com', 'voz.vn',
+  // TMĐT / dịch vụ
+  'chotot.com', 'thegioididong.com', 'dienmayxanh.com', 'bachhoaxanh.com',
+  'xanhsm.com', 'be.com.vn', 'garena.vn',
+];
+
+const _globalBlockedInChina = [
+  // Meta
+  'facebook.com', 'fb.com', 'fb.me', 'fbcdn.net', 'fbsbx.com', 'messenger.com',
+  'instagram.com', 'cdninstagram.com', 'threads.net', 'whatsapp.com',
+  'whatsapp.net',
+  // TikTok (bản quốc tế)
+  'tiktok.com', 'tiktokv.com', 'tiktokcdn.com', 'tiktokcdn-us.com',
+  'tiktokv.us', 'byteoversea.com', 'ibytedtos.com', 'ibyteimg.com',
+  'ttwstatic.com', 'muscdn.com',
+  // Google / YouTube
+  'google.com', 'google.com.vn', 'googleapis.com', 'gstatic.com',
+  'googlevideo.com', 'googleusercontent.com', 'ggpht.com', 'youtube.com',
+  'youtu.be', 'ytimg.com', 'gmail.com', 'gvt1.com', 'gvt2.com',
+  // Khác
+  'telegram.org', 't.me', 'x.com', 'twitter.com', 'twimg.com',
+  'discord.com', 'discord.gg', 'discordapp.com', 'line.me', 'line-scdn.net',
+  'netflix.com', 'nflxvideo.net', 'spotify.com', 'wikipedia.org',
+];
+
+List<String> _applyChinaToVietnamRouting(
+  Map rawConfig,
+  List<String> rules,
+) {
+  // Nhóm chính = đích của MATCH (nhóm người dùng chọn máy chủ)
+  String? mainTarget;
+  for (int i = rules.length - 1; i >= 0; i--) {
+    final parts = rules[i].split(',');
+    if (parts.length >= 2 && parts[0].trim().toUpperCase() == 'MATCH') {
+      mainTarget = parts[1].trim();
+      break;
+    }
+  }
+  final groups = rawConfig['proxy-groups'];
+  if ((mainTarget == null ||
+          mainTarget.toUpperCase() == 'DIRECT' ||
+          mainTarget.toUpperCase() == 'REJECT') &&
+      groups is List &&
+      groups.isNotEmpty) {
+    final first = groups.first;
+    if (first is Map && first['name'] != null) {
+      mainTarget = first['name'].toString();
+    }
+  }
+  if (mainTarget == null || mainTarget.isEmpty) return rules;
+
+  // Nhóm Việt Nam: các node có cờ 🇻🇳 / tên Việt Nam
+  String vnTarget = mainTarget;
+  final proxies = rawConfig['proxies'];
+  if (proxies is List) {
+    final vnRegex = RegExp(r'🇻🇳|việt\s*nam|viet\s*nam|\bVN\b', caseSensitive: false);
+    final vnNames = <String>[
+      for (final p in proxies)
+        if (p is Map && p['name'] != null && vnRegex.hasMatch(p['name'].toString()))
+          p['name'].toString(),
+    ];
+    if (vnNames.isNotEmpty) {
+      final list = groups is List ? groups : <dynamic>[];
+      list.removeWhere((g) => g is Map && g['name'] == _vnGroupName);
+      list.add({
+        'name': _vnGroupName,
+        'type': 'url-test',
+        'proxies': vnNames,
+        'url': 'https://www.gstatic.com/generate_204',
+        'interval': 300,
+        'tolerance': 50,
+        'lazy': true,
+        'hidden': true,
+      });
+      rawConfig['proxy-groups'] = list;
+      vnTarget = _vnGroupName;
+    }
+  }
+
+  final forced = <String>[
+    for (final d in _vnDomainSuffixes) 'DOMAIN-SUFFIX,$d,$vnTarget',
+    for (final d in _globalBlockedInChina) 'DOMAIN-SUFFIX,$d,$mainTarget',
+    'GEOIP,VN,$vnTarget',
+    'GEOSITE,cn,DIRECT',
+    'GEOIP,CN,DIRECT',
+  ];
+  // Bỏ các luật cũ trùng (vd. GEOIP,VN,DIRECT của gói "Bypass VN")
+  final cleaned = rules.where((r) {
+    final up = r.replaceAll(' ', '').toUpperCase();
+    return !up.startsWith('GEOIP,VN,') && !up.startsWith('DOMAIN-SUFFIX,VN,');
+  }).toList();
+  final hasMatch = cleaned.any(
+    (r) => r.trim().toUpperCase().startsWith('MATCH,'),
+  );
+  return [
+    ...forced,
+    ...cleaned,
+    if (!hasMatch) 'MATCH,$mainTarget',
+  ];
 }
 
 Future<List<String>> shakingProfileTask(
