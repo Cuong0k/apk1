@@ -356,7 +356,7 @@ Future<VM2<String, String>> _makeRealProfileTask(
 //  1. Trang/app Việt Nam (.vn, Zalo, ngân hàng, báo, TMĐT, GEOIP VN)
 //     → nhóm máy chủ Việt Nam (tự chọn node 🇻🇳 nhanh nhất) để có IP Việt Nam.
 //  2. Mạng xã hội / dịch vụ quốc tế bị chặn ở TQ (Facebook, TikTok, YouTube,
-//     Google, Telegram…) → luôn đi VPN (nhóm chính người dùng đang chọn).
+//     Google, Telegram…) → cũng qua nhóm Việt Nam (luôn ra IP Việt Nam).
 //  3. Trang/app Trung Quốc → đi thẳng (nhanh, không bị app TQ chặn IP nước ngoài).
 //  4. Còn lại → theo luật gói, cuối cùng MATCH → VPN.
 // Tránh trường hợp gói có luật "Bypass VN" (GEOIP,VN,DIRECT) làm trang VN
@@ -455,7 +455,8 @@ List<String> _applyChinaToVietnamRouting(
 
   final forced = <String>[
     for (final d in _vnDomainSuffixes) 'DOMAIN-SUFFIX,$d,$vnTarget',
-    for (final d in _globalBlockedInChina) 'DOMAIN-SUFFIX,$d,$mainTarget',
+    // Mạng xã hội & dịch vụ quốc tế cũng ra IP Việt Nam
+    for (final d in _globalBlockedInChina) 'DOMAIN-SUFFIX,$d,$vnTarget',
     'GEOIP,VN,$vnTarget',
     'GEOSITE,cn,DIRECT',
     'GEOIP,CN,DIRECT',
