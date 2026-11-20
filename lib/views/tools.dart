@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' show dirname, join;
+import 'package:url_launcher/url_launcher.dart';
 
 import 'config/advanced.dart';
 import 'developer.dart';
@@ -89,6 +90,10 @@ class _ToolViewState extends ConsumerState<ToolsView> {
       ),
     );
     final items = [
+      if (system.isAndroid) ...[
+        ListHeader(title: 'Cập nhật'),
+        const _UpdateAppItem(),
+      ],
       Consumer(
         builder: (_, ref, _) {
           final state = ref.watch(moreToolsSelectorStateProvider);
@@ -114,6 +119,33 @@ class _ToolViewState extends ConsumerState<ToolsView> {
         itemBuilder: (_, index) => items[index],
         padding: const EdgeInsets.only(bottom: 20),
       ),
+    );
+  }
+}
+
+class _UpdateAppItem extends StatelessWidget {
+  const _UpdateAppItem();
+
+  static const _apkUrl = 'https://client-user.jiangsuhk.com/apk/vpnstore.apk';
+
+  Future<void> _handleUpdate() async {
+    // Mở bằng trình duyệt → tải APK → bấm cài đặt là cài đè lên bản hiện tại
+    final ok = await launchUrl(
+      Uri.parse(_apkUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok) {
+      globalState.showNotifier('Không mở được link tải, vui lòng thử lại');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListItem(
+      leading: const Icon(Icons.system_update, color: kHeaderColor),
+      title: const Text('Cập nhật ứng dụng'),
+      subtitle: const Text('Tải và cài đặt phiên bản VPN Store mới nhất'),
+      onTap: _handleUpdate,
     );
   }
 }
