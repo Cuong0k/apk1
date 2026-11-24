@@ -346,6 +346,7 @@ Future<VM2<String, String>> _makeRealProfileTask(
     rawConfig['proxy-groups'] = data.proxyGroups;
   }
   rules = _applyChinaToVietnamRouting(rawConfig, rules);
+  rules = _applyAntiDpi(rawConfig, rules);
   rawConfig['rules'] = rules;
   final yaml = await _encodeYaml(Map<String, dynamic>.from(rawConfig));
   return VM2(yaml, yaml.toMd5());
@@ -473,6 +474,35 @@ List<String> _applyChinaToVietnamRouting(
     ...forced,
     ...cleaned,
     if (!hasMatch) 'MATCH,$mainTarget',
+  ];
+}
+
+// ─── Ngụy trang chống DPI (chạy ngầm, không có tuỳ chọn trên giao diện) ───────
+// 1. Dấu vân tay TLS giống Chrome (uTLS) cho mọi node TLS/REALITY → ClientHello
+//    không lộ là Go/VPN, DPI thấy như trình duyệt vào web HTTPS bình thường.
+// 2. Chặn QUIC (UDP/443) tới đích ngoài TQ → app tự lùi về TCP/TLS, đi gọn
+//    trong đường REALITY (nhà mạng TQ bóp/chặn UDP rất mạnh).
+List<String> _applyAntiDpi(Map rawConfig, List<String> rules) {
+  rawConfig['global-client-fingerprint'] = 'chrome';
+  final proxies = rawConfig['proxies'];
+  if (proxies is List) {
+    for (final p in proxies) {
+      if (p is! Map) continue;
+      final isTls = p['tls'] == true || p['reality-opts'] != null;
+      final type = p['type']?.toString().toLowerCase();
+      if (isTls || type == 'trojan') {
+        final fp = p['client-fingerprint']?.toString() ?? '';
+        if (fp.isEmpty || fp == 'none' || fp == 'golang') {
+          p['client-fingerprint'] = 'chrome';
+        }
+      }
+      // TFO dễ bị middlebox TQ chặn/đánh dấu
+      p.remove('tfo');
+    }
+  }
+  return [
+    'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((GEOSITE,cn)))),REJECT',
+    ...rules,
   ];
 }
 
